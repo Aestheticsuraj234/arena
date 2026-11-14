@@ -6,6 +6,9 @@ const envSchema = z.object({
   API_URL: z.url().default('http://localhost:4000'),
   WEB_URL: z.url().default('http://localhost:3000'),
   DATABASE_URL: z.string().min(1).default('postgres://postgres:postgres@localhost:5432/arena'),
+  REDIS_URL: z.string().min(1).default('redis://localhost:6379'),
+  /** How long `POST /v1/run` waits for a verdict before answering 202. */
+  RUN_WAIT_MS: z.coerce.number().int().positive().default(30_000),
   BETTER_AUTH_SECRET: z
     .string()
     .min(32, {message: 'BETTER_AUTH_SECRET must be at least 32 characters'}),

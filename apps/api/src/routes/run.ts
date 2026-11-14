@@ -1,35 +1,24 @@
-import {LanguageRepository, type Database} from '@arena/db';
-import {toRunResponse, type Executor, type LanguageRegistry} from '@arena/engine';
-import {DEFAULT_LIMITS, runRequestSchema} from '@arena/shared';
+import {isFinalStatus} from '@arena/db';
+import {runRequestSchema} from '@arena/shared';
 import {Hono} from 'hono';
 
 import type {AppEnv} from '../app-env';
-import {ValidationError} from '../lib/errors';
+import {UnauthorizedError} from '../lib/errors';
 import {parseBody} from '../lib/validate';
 import {requireUser} from '../middleware/session';
+import {toSubmissionView, type SubmissionService} from '../services/submission-service';
 
 /**
- * `POST /v1/run`: runs code and waits for the result. Synchronous on purpose
- * for this chapter; Chapter 6 moves execution to a queue and workers.
+ * `POST /v1/run`: queue the code and wait for the verdict. Answers 200 with
+ * the result, or 202 with the token if it takes longer than `waitMs`.
  */
-export function runRoutes(db: Database, registry: LanguageRegistry, executor: Executor) {
-  const languages = new LanguageRepository(db);
+export function runRoutes(service: SubmissionService, waitMs: number) {
   return new Hono<AppEnv>().post('/', requireUser, async (c) => {
+    const user = c.get('user');
+    if (!user) throw new UnauthorizedError();
     const body = await parseBody(c, runRequestSchema);
-    const language = await languages.findById(body.languageId);
-    if (!language?.isActive || !registry.has(body.languageId)) {
-      throw new ValidationError(`languageId: ${body.languageId} is not supported`);
-    }
-    const result = await executor.execute({
-      languageId: body.languageId,
-      sourceCode: body.sourceCode,
-      inputs: [body.stdin],
-      limits: {
-        timeLimitMs: body.timeLimitMs ?? DEFAULT_LIMITS.timeLimitMs,
-        memoryLimitKb: body.memoryLimitKb ?? DEFAULT_LIMITS.memoryLimitKb,
-        outputLimitBytes: DEFAULT_LIMITS.outputLimitBytes,
-      },
-    });
-    return c.json(toRunResponse(result));
+    const created = await service.create({userId: user.id, ...body});
+    const latest = await service.waitForResult(created, waitMs);
+    return c.json(toSubmissionView(latest), isFinalStatus(latest.status) ? 200 : 202);
   });
 }

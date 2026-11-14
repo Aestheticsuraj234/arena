@@ -18,8 +18,8 @@ for HTTPS.
 | --- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------- |
 | 1   | Project init and authentication setup    | Turborepo + pnpm monorepo (`apps/api`, `apps/web`, `packages/*`), Hono API, Better Auth on web, design system, CI                   | ✅ Done  |
 | 2   | Database and ORM layer setup             | Drizzle ORM, schema (users, api_keys, languages, submissions, batches, problems, test_cases), migrations, Repository pattern, seed  | ✅ Done  |
-| 3   | Language runtime images                  | Multi-arch (amd64 + arm64) Docker images for C, C++, Java, JavaScript, TypeScript, Python; `LanguageRunner` (Strategy) + registry   | ⏸ Next   |
-| 4   | The executor: running code once          | `Executor` interface + `DockerExecutor` (dockerode): compile, run, stdin/stdout/stderr, exit codes, time and memory; sync `/run`    | Planned  |
+| 3   | Language runtime images                  | Multi-arch (amd64 + arm64) Docker images for C, C++, Java, JavaScript, TypeScript, Python; `LanguageRunner` (Strategy) + registry   | ✅ Done  |
+| 4   | The executor: running code once          | `Executor` interface + `DockerExecutor` (dockerode): compile, run, stdin/stdout/stderr, exit codes, time and memory; sync `/run`    | ⏸ Next   |
 | 5   | Sandbox hardening                        | CPU, memory, timeout, `--network none`, read-only FS, non-root user, pids limit, output cap; tests that attack the runner           | Planned  |
 | 6   | Job queue and workers                    | BullMQ queue, new `apps/worker` app, job lifecycle state machine (queued → running → done / failed / timeout), concurrency, retries | Planned  |
 | 7   | Judge0-compatible submissions API        | `POST /submissions`, `GET /submissions/:token`, `wait=true`, status IDs, base64 fields, API keys, rate limiting                     | Planned  |

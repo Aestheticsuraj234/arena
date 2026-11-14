@@ -18,6 +18,7 @@ export function runRoutes(service: SubmissionService, waitMs: number) {
     if (!user) throw new UnauthorizedError();
     const body = await parseBody(c, runRequestSchema);
     const created = await service.create({userId: user.id, ...body});
+    if (c.req.query('wait') === 'false') return c.json(toSubmissionView(created), 202);
     const latest = await service.waitForResult(created, waitMs);
     return c.json(toSubmissionView(latest), isFinalStatus(latest.status) ? 200 : 202);
   });

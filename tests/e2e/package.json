@@ -1,0 +1,15 @@
+{
+  "name": "@arena/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser flows against a running Arena (dev or production).",
+  "scripts": {
+    "auth": "node auth-flow.mjs /tmp",
+    "app": "node app-flow.mjs /tmp",
+    "e2e": "node auth-flow.mjs /tmp && node app-flow.mjs /tmp"
+  },
+  "devDependencies": {
+    "playwright": "^1.65.0"
+  }
+}

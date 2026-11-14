@@ -1,4 +1,6 @@
 import {chromium} from 'playwright';
+const WEB = process.env.WEB_URL ?? 'http://localhost:3000';
+const API = process.env.API_URL ?? 'http://localhost:4000';
 
 const out = process.argv[2];
 const browser = await chromium.launch();
@@ -19,7 +21,7 @@ const setCode = (code) =>
   page.evaluate((c) => window.monaco.editor.getModels()[0].setValue(c), code);
 
 // Sign up
-await page.goto('http://localhost:3000/sign-up');
+await page.goto(WEB + '/sign-up');
 await page.fill('#name', 'Suraj');
 await page.fill('#email', `ui-${Date.now()}@test.dev`);
 await page.fill('#password', 'password123');
@@ -99,7 +101,7 @@ await page.click('button:has-text("Create key")');
 await page.waitForSelector('[data-testid=new-key] code');
 const key = (await page.textContent('[data-testid=new-key] code')).trim();
 await shot('09-api-keys');
-const res = await fetch('http://localhost:4000/submissions?wait=true', {
+const res = await fetch(API + '/submissions?wait=true', {
   method: 'POST',
   headers: {'Content-Type': 'application/json', 'X-Auth-Token': key},
   body: JSON.stringify({source_code: 'print(6*7)', language_id: 71}),

@@ -1,0 +1,33 @@
+# Prometheus + Grafana for local development, scraping the API and worker
+# running on the host with `pnpm dev`.
+#
+#   docker compose -f docker-compose.observability.yml up -d
+#   Prometheus: http://localhost:9090   Grafana: http://localhost:3001
+services:
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    volumes:
+      - ./ops/prometheus/prometheus.dev.yml:/etc/prometheus/prometheus.yml:ro
+      - ./ops/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    ports:
+      - '9090:9090'
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    environment:
+      PROMETHEUS_URL: http://prometheus:9090
+      GF_AUTH_ANONYMOUS_ENABLED: 'true'
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/arena.json
+    volumes:
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./ops/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - '3001:3000'
+    depends_on:
+      - prometheus

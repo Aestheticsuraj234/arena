@@ -7,8 +7,6 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends time \
  && rm -rf /var/lib/apt/lists/*
 
-# Fewer threads and no class-data sharing writes keep startup small in a sandbox.
-ENV JAVA_TOOL_OPTIONS="-XX:+UseSerialGC -XX:TieredStopAtLevel=1 -Xshare:auto"
 WORKDIR /box
 LABEL org.opencontainers.image.title="arena-runtime-java"
 CMD ["sleep", "infinity"]

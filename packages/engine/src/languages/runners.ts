@@ -43,11 +43,28 @@ export class JavaRunner extends CompiledRunner {
   override readonly memoryOverheadKb = 131_072;
 
   compileCommand() {
-    return ['javac', '-J-Xms32m', '-J-Xmx256m', '-encoding', 'UTF-8', 'Main.java'] as const;
+    return [
+      'javac',
+      '-J-XX:+UseSerialGC',
+      '-J-XX:TieredStopAtLevel=1',
+      '-J-Xmx256m',
+      '-encoding',
+      'UTF-8',
+      'Main.java',
+    ] as const;
   }
 
   runCommand() {
-    return ['java', '-Xss64m', '-cp', '.', 'Main'] as const;
+    // Serial GC and C1-only JIT: fewer threads and faster start in a sandbox.
+    return [
+      'java',
+      '-XX:+UseSerialGC',
+      '-XX:TieredStopAtLevel=1',
+      '-Xss64m',
+      '-cp',
+      '.',
+      'Main',
+    ] as const;
   }
 }
 

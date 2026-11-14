@@ -13,9 +13,11 @@
   },
   "dependencies": {
     "@arena/db": "workspace:*",
+    "@arena/engine": "workspace:*",
     "@arena/shared": "workspace:*",
     "@hono/node-server": "^2.1.8",
     "better-auth": "^1.7.25",
+    "dockerode": "^5.0.1",
     "drizzle-orm": "^0.45.4",
     "hono": "^4.13.18",
     "pg": "^8.23.1",

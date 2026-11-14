@@ -19,7 +19,9 @@
     "db:seed": "pnpm --filter @arena/db db:seed",
     "db:generate": "pnpm --filter @arena/db db:generate",
     "images:build": "./scripts/build-images.sh",
-    "test:images": "pnpm --filter @arena/engine test:images"
+    "test:images": "pnpm --filter @arena/engine test:images",
+    "smoke": "./scripts/smoke-api.sh",
+    "test:docker": "pnpm --filter @arena/engine test:docker"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

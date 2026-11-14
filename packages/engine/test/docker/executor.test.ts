@@ -74,7 +74,7 @@ describe('DockerExecutor: outcomes', () => {
 
   it('reports memory limit exceeded', async () => {
     const big = {...job(71, 'x = bytearray(400 * 1024 * 1024)\nx[::4096] = b"1" * len(x[::4096])')};
-    big.limits = {...big.limits, memoryLimitKb: 65_536};
+    big.limits = {...big.limits, memoryLimitKb: 65_536, timeLimitMs: 5000};
     const result = await executor.execute(big);
     expect(result.runs[0]?.status).toBe('memory_limit_exceeded');
   });

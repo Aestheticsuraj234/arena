@@ -5,6 +5,7 @@ import type {LanguageRunner} from '../languages/language-runner';
 import {classifyRun, parseTimeOutput, signalName} from './classify';
 import type {Executor} from './executor';
 import {OutputCollector} from './output-collector';
+import {DEFAULT_SANDBOX_POLICY, hostConfigFor, type SandboxPolicy} from './sandbox-policy';
 import type {
   CompileOutcome,
   ExecutionJob,
@@ -15,6 +16,7 @@ import type {
 
 export interface DockerExecutorOptions {
   docker?: Docker;
+  policy?: SandboxPolicy;
   /** Compile time limit; compilers are slow but must not hang forever. */
   compileTimeLimitMs?: number;
   /** Memory floor for the container, so compilers fit even with tiny limits. */
@@ -26,24 +28,53 @@ interface ExecResult {
   stdout: OutputCollector;
   stderr: OutputCollector;
   wallMs: number;
+  /** The Node-side deadline fired and the container was killed. */
+  hung: boolean;
+}
+
+interface ExecOptions {
+  stdin: string;
+  outputLimitBytes: number;
+  deadlineMs: number;
+  /** Called once when stdout or stderr passes the limit. */
+  onOverflow?: () => void;
 }
 
 const WORKDIR = '/box';
 const META_FILE = '/tmp/.arena-meta';
 /** Extra time `docker exec` itself may take before we give up on it. */
-const EXEC_GRACE_MS = 5000;
+const EXEC_GRACE_MS = 2000;
+/** Kills every process of the sandbox user except PID 1 and the shell itself. */
+const KILL_USER_PROCESSES = ['sh', '-c', 'kill -9 -1 2>/dev/null; true'];
+/** Room for `sh`, `time` and `timeout` next to the program. */
+const TOOLING_MEMORY_KB = 16_384;
 
 /** Wall-clock deadline for a run: room for I/O waits, still bounded. */
 export function wallLimitFor(timeLimitMs: number): number {
   return Math.round(timeLimitMs * 1.5) + 500;
 }
 
+function internalError(message: string): RunOutcome {
+  return {
+    status: 'internal_error',
+    stdout: '',
+    stderr: '',
+    exitCode: null,
+    signal: null,
+    timeMs: 0,
+    memoryKb: 0,
+    message,
+  };
+}
+
 /**
- * Runs each job in a fresh container: start it idle, copy the source in,
- * compile once, then `docker exec` one run per input, and always remove it.
+ * Runs each job in a fresh, locked-down container: start it idle, copy the
+ * source in, compile once, then `docker exec` one run per input, and always
+ * remove it.
  */
 export class DockerExecutor implements Executor {
   private readonly docker: Docker;
+  private readonly policy: SandboxPolicy;
   private readonly compileTimeLimitMs: number;
   private readonly minContainerMemoryKb: number;
 
@@ -52,6 +83,7 @@ export class DockerExecutor implements Executor {
     options: DockerExecutorOptions = {},
   ) {
     this.docker = options.docker ?? new Docker();
+    this.policy = options.policy ?? DEFAULT_SANDBOX_POLICY;
     this.compileTimeLimitMs = options.compileTimeLimitMs ?? 15_000;
     this.minContainerMemoryKb = options.minContainerMemoryKb ?? 524_288;
   }
@@ -69,10 +101,20 @@ export class DockerExecutor implements Executor {
         compile = await this.compile(container, compileCmd);
         if (!compile.success) return {compile, runs: []};
       }
+      await this.tightenMemory(container, runner, job.limits);
 
       const runs: RunOutcome[] = [];
-      for (const input of job.inputs) {
-        runs.push(await this.run(container, runner, input, job.limits));
+      let alive = true;
+      for (const [i, input] of job.inputs.entries()) {
+        if (!alive) {
+          runs.push(internalError('Skipped: the sandbox was stopped by an earlier run'));
+          continue;
+        }
+        const {outcome, hung} = await this.run(container, runner, input, job.limits);
+        runs.push(outcome);
+        alive = !hung;
+        // Background processes from this run must not touch the next one.
+        if (alive && i < job.inputs.length - 1) await this.killUserProcesses(container);
       }
       return {compile, runs};
     } finally {
@@ -94,16 +136,12 @@ export class DockerExecutor implements Executor {
     return this.docker.createContainer({
       Image: runner.image,
       Cmd: ['sleep', 'infinity'],
+      User: this.policy.user,
       WorkingDir: WORKDIR,
       Env: ['HOME=/tmp'],
       NetworkDisabled: true,
-      HostConfig: {
-        NetworkMode: 'none',
-        Memory: memoryKb * 1024,
-        MemorySwap: memoryKb * 1024,
-        NanoCpus: 1_000_000_000,
-        Tmpfs: {[WORKDIR]: 'rw,exec,size=64m,mode=1777', '/tmp': 'rw,exec,size=64m,mode=1777'},
-      },
+      Labels: {'arena.sandbox': 'true'},
+      HostConfig: hostConfigFor(this.policy, memoryKb * 1024),
     });
   }
 
@@ -128,10 +166,13 @@ export class DockerExecutor implements Executor {
       outputLimitBytes: 64 * 1024,
       deadlineMs: this.compileTimeLimitMs + EXEC_GRACE_MS,
     });
-    const timedOut = res.exitCode === 137 && res.wallMs >= this.compileTimeLimitMs - 100;
+    const timedOut =
+      res.hung ||
+      ((res.exitCode === 137 || res.exitCode === 124) &&
+        res.wallMs >= this.compileTimeLimitMs - 100);
     const output = [res.stdout.text(), res.stderr.text()].filter(Boolean).join('\n');
     return {
-      success: res.exitCode === 0,
+      success: res.exitCode === 0 && !res.hung,
       output: timedOut ? `${output}\nCompilation timed out`.trim() : output,
       exitCode: res.exitCode,
       timeMs: res.wallMs,
@@ -143,7 +184,7 @@ export class DockerExecutor implements Executor {
     runner: LanguageRunner,
     input: string,
     limits: ExecutionLimits,
-  ): Promise<RunOutcome> {
+  ): Promise<{outcome: RunOutcome; hung: boolean}> {
     const wallLimitMs = wallLimitFor(limits.timeLimitMs);
     const cmd = [
       '/usr/bin/time',
@@ -161,7 +202,44 @@ export class DockerExecutor implements Executor {
       stdin: input,
       outputLimitBytes: limits.outputLimitBytes,
       deadlineMs: wallLimitMs + EXEC_GRACE_MS,
+      // Stop a program that prints forever instead of waiting for the time limit.
+      onOverflow: () => void this.killUserProcesses(container),
     });
+
+    if (res.hung) {
+      // Usually a background process kept stdout open after main exited.
+      return {
+        hung: true,
+        outcome: {
+          status: 'time_limit_exceeded',
+          stdout: res.stdout.text(),
+          stderr: res.stderr.text(),
+          exitCode: null,
+          signal: null,
+          timeMs: res.wallMs,
+          memoryKb: 0,
+          message: 'Time limit exceeded: the program or a child process did not exit',
+        },
+      };
+    }
+
+    if (res.stdout.truncated || res.stderr.truncated) {
+      // We killed the program (and `time` with it), so there are no stats.
+      return {
+        hung: false,
+        outcome: {
+          status: 'output_limit_exceeded',
+          stdout: res.stdout.text(),
+          stderr: res.stderr.text(),
+          exitCode: null,
+          signal: null,
+          timeMs: res.wallMs,
+          memoryKb: 0,
+          message: `Output limit of ${Math.round(limits.outputLimitBytes / 1024)} KB exceeded`,
+        },
+      };
+    }
+
     const meta = await this.exec(container, ['cat', META_FILE], {
       stdin: '',
       outputLimitBytes: 4096,
@@ -169,16 +247,7 @@ export class DockerExecutor implements Executor {
     });
     const parsed = parseTimeOutput(meta.stdout.text());
     if (!parsed) {
-      return {
-        status: 'internal_error',
-        stdout: res.stdout.text(),
-        stderr: res.stderr.text(),
-        exitCode: res.exitCode,
-        signal: null,
-        timeMs: res.wallMs,
-        memoryKb: 0,
-        message: 'Could not read run statistics',
-      };
+      return {hung: false, outcome: internalError('Could not read run statistics')};
     }
 
     const signal = parsed.signal;
@@ -198,25 +267,52 @@ export class DockerExecutor implements Executor {
         memoryLimitKb: limits.memoryLimitKb + runner.memoryOverheadKb,
       },
     );
+    const stopped = status === 'time_limit_exceeded' || status === 'output_limit_exceeded';
     return {
-      status,
-      stdout: res.stdout.text(),
-      stderr: res.stderr.text(),
-      // A timed-out program has no exit code of its own.
-      exitCode: status === 'time_limit_exceeded' ? null : exitCode,
-      signal: signalName(signal),
-      timeMs:
-        status === 'time_limit_exceeded' ? Math.max(parsed.cpuMs, parsed.wallMs) : parsed.cpuMs,
-      memoryKb: parsed.memoryKb,
-      message,
+      hung: false,
+      outcome: {
+        status,
+        stdout: res.stdout.text(),
+        stderr: res.stderr.text(),
+        // A program we stopped has no exit code or signal of its own.
+        exitCode: stopped ? null : exitCode,
+        signal: stopped ? null : signalName(signal),
+        timeMs:
+          status === 'time_limit_exceeded' ? Math.max(parsed.cpuMs, parsed.wallMs) : parsed.cpuMs,
+        memoryKb: parsed.memoryKb,
+        message,
+      },
     };
+  }
+
+  /**
+   * The container starts with a generous memory floor so compilers fit. Before
+   * running user code, lower the cap to the user's limit so the kernel stops
+   * an allocation loop right away.
+   */
+  private async tightenMemory(
+    container: Docker.Container,
+    runner: LanguageRunner,
+    limits: ExecutionLimits,
+  ): Promise<void> {
+    const bytes = (limits.memoryLimitKb + runner.memoryOverheadKb + TOOLING_MEMORY_KB) * 1024;
+    // If the update fails, the floor still applies and the peak check still runs.
+    await container.update({Memory: bytes, MemorySwap: bytes}).catch(() => undefined);
+  }
+
+  private async killUserProcesses(container: Docker.Container): Promise<void> {
+    await this.exec(container, KILL_USER_PROCESSES, {
+      stdin: '',
+      outputLimitBytes: 1024,
+      deadlineMs: 5000,
+    }).catch(() => undefined);
   }
 
   /** Runs one command in the container, feeding stdin and capturing output. */
   private async exec(
     container: Docker.Container,
     cmd: readonly string[],
-    opts: {stdin: string; outputLimitBytes: number; deadlineMs: number},
+    opts: ExecOptions,
   ): Promise<ExecResult> {
     const exec = await container.exec({
       Cmd: [...cmd],
@@ -226,14 +322,14 @@ export class DockerExecutor implements Executor {
       WorkingDir: WORKDIR,
     });
     const stream = await exec.start({hijack: true, stdin: true});
-    const stdout = new OutputCollector(opts.outputLimitBytes);
-    const stderr = new OutputCollector(opts.outputLimitBytes);
+    const stdout = new OutputCollector(opts.outputLimitBytes, opts.onOverflow);
+    const stderr = new OutputCollector(opts.outputLimitBytes, opts.onOverflow);
     this.docker.modem.demuxStream(stream, stdout, stderr);
 
     const started = performance.now();
-    const finished = new Promise<void>((resolve, reject) => {
-      stream.on('end', resolve);
-      stream.on('close', resolve);
+    const finished = new Promise<'done'>((resolve, reject) => {
+      stream.on('end', () => resolve('done'));
+      stream.on('close', () => resolve('done'));
       stream.on('error', reject);
     });
     stream.end(opts.stdin);
@@ -242,7 +338,7 @@ export class DockerExecutor implements Executor {
     const deadline = new Promise<'deadline'>((resolve) => {
       timer = setTimeout(() => resolve('deadline'), opts.deadlineMs);
     });
-    const outcome = await Promise.race([finished.then(() => 'done' as const), deadline]);
+    const outcome = await Promise.race([finished, deadline]);
     clearTimeout(timer);
     const wallMs = Math.round(performance.now() - started);
 
@@ -250,9 +346,9 @@ export class DockerExecutor implements Executor {
       // The in-container timeout should have fired; this is the backstop.
       stream.destroy();
       await container.kill().catch(() => undefined);
-      return {exitCode: 137, stdout, stderr, wallMs};
+      return {exitCode: null, stdout, stderr, wallMs, hung: true};
     }
     const info = await exec.inspect();
-    return {exitCode: info.ExitCode ?? null, stdout, stderr, wallMs};
+    return {exitCode: info.ExitCode ?? null, stdout, stderr, wallMs, hung: false};
   }
 }

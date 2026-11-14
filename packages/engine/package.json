@@ -10,11 +10,17 @@
     "lint": "eslint src test",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run test/unit",
+    "test:docker": "vitest run test/images test/docker",
     "test:images": "vitest run test/images"
   },
   "devDependencies": {
     "@arena/tsconfig": "workspace:*",
+    "@types/dockerode": "^4.0.2",
     "@types/node": "^26.6.6",
     "vitest": "^5.1.0"
+  },
+  "dependencies": {
+    "dockerode": "^5.0.1",
+    "@arena/shared": "workspace:*"
   }
 }

@@ -10,6 +10,8 @@ export interface WorkerOptions {
   /** Submissions run at the same time in this process. */
   concurrency: number;
   log?: (message: string) => void;
+  /** Called when a job failed for the last time. */
+  onGiveUp?: (submissionId: string) => void;
 }
 
 /** A BullMQ worker that hands each job to the `SubmissionProcessor`. */
@@ -18,6 +20,7 @@ export function createSubmissionWorker({
   processor,
   concurrency,
   log = () => undefined,
+  onGiveUp,
 }: WorkerOptions): Worker<SubmissionJobData, ProcessOutcome> {
   const worker = new Worker<SubmissionJobData, ProcessOutcome>(
     SUBMISSION_QUEUE,
@@ -36,6 +39,7 @@ export function createSubmissionWorker({
       `submission ${job.data.submissionId} failed (attempt ${job.attemptsMade}/${attempts}): ${err.message}`,
     );
     if (job.attemptsMade >= attempts) {
+      onGiveUp?.(job.data.submissionId);
       void processor.giveUp(job.data.submissionId, err.message);
     }
   });

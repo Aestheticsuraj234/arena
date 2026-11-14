@@ -63,7 +63,23 @@ export function toProblemResult(judged: JudgeResult): SubmissionResult {
  * has one input; a problem submission runs its test cases in one sandbox and
  * stops at the first failure.
  */
+export interface ProcessorHooks {
+  /** A submission was claimed and starts running. */
+  onStart?: (info: {submissionId: string; languageId: number}) => void;
+  /** A verdict was saved. `durationMs` covers claim → verdict. */
+  onFinish?: (info: {
+    submissionId: string;
+    languageId: number;
+    status: SubmissionResult['status'];
+    durationMs: number;
+  }) => void;
+  /** Execution threw (Docker down…); the job will be retried. */
+  onError?: (info: {submissionId: string; error: unknown}) => void;
+}
+
 export interface ProcessorOptions {
+  /** Metrics and logging callbacks (Chapter 11). */
+  hooks?: ProcessorHooks;
   /** Live events for SSE (Chapter 9). Optional: nothing is published without it. */
   events?: Pick<SubmissionEvents, 'publish'>;
   /** A `processing` row older than this may be claimed again. */
@@ -73,6 +89,7 @@ export interface ProcessorOptions {
 export class SubmissionProcessor {
   private readonly events: Pick<SubmissionEvents, 'publish'>;
   private readonly staleAfterMs: number;
+  private readonly hooks: ProcessorHooks;
 
   constructor(
     private readonly submissions: SubmissionRepository,
@@ -82,6 +99,7 @@ export class SubmissionProcessor {
   ) {
     this.events = options.events ?? NO_EVENTS;
     this.staleAfterMs = options.staleAfterMs ?? 5 * 60_000;
+    this.hooks = options.hooks ?? {};
   }
 
   async process(submissionId: string): Promise<ProcessOutcome> {
@@ -91,15 +109,22 @@ export class SubmissionProcessor {
     const submission = await this.submissions.findById(submissionId);
     if (!submission) return 'skipped';
     this.emit({type: 'status', token: submission.token, status: 'processing'});
+    const info = {submissionId, languageId: submission.languageId};
+    this.hooks.onStart?.(info);
+    const started = performance.now();
 
+    let status: SubmissionResult['status'];
     try {
-      if (submission.problemId) await this.judgeProblem(submission, submission.problemId);
-      else await this.runPlain(submission);
+      status = submission.problemId
+        ? await this.judgeProblem(submission, submission.problemId)
+        : await this.runPlain(submission);
     } catch (err) {
       // Infrastructure failure (Docker down…): let BullMQ retry it.
+      this.hooks.onError?.({submissionId, error: err});
       await this.submissions.requeue(submissionId);
       throw err;
     }
+    this.hooks.onFinish?.({...info, status, durationMs: performance.now() - started});
     return 'finished';
   }
 
@@ -115,21 +140,27 @@ export class SubmissionProcessor {
     void this.events.publish(event).catch(() => undefined);
   }
 
-  private async finish(s: Submission, result: SubmissionResult): Promise<void> {
+  private async finish(
+    s: Submission,
+    result: SubmissionResult,
+  ): Promise<SubmissionResult['status']> {
     const saved = await this.submissions.saveResult(s.id, result);
     if (saved) this.emit({type: 'done', token: s.token, status: result.status});
+    return result.status;
   }
 
-  private async runPlain(s: Submission): Promise<void> {
+  private async runPlain(s: Submission): Promise<SubmissionResult['status']> {
     const result = await this.executor.execute(this.job(s, [s.stdin ?? '']));
-    await this.finish(s, toSubmissionResult(result, s.expectedOutput));
+    return this.finish(s, toSubmissionResult(result, s.expectedOutput));
   }
 
-  private async judgeProblem(s: Submission, problemId: string): Promise<void> {
+  private async judgeProblem(
+    s: Submission,
+    problemId: string,
+  ): Promise<SubmissionResult['status']> {
     const problem = await this.problems.findById(problemId);
     if (!problem) {
-      await this.finish(s, {status: 'internal_error', message: 'Problem not found'});
-      return;
+      return this.finish(s, {status: 'internal_error', message: 'Problem not found'});
     }
     const tests: TestCase[] = s.sampleOnly
       ? problem.testCases.filter((t) => t.isSample)
@@ -169,7 +200,7 @@ export class SubmissionProcessor {
         };
       }),
     );
-    await this.finish(s, toProblemResult(judged));
+    return this.finish(s, toProblemResult(judged));
   }
 
   private job(s: Submission, inputs: string[]): ExecutionJob {

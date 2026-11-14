@@ -7,15 +7,16 @@
     "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
     "build": "tsup",
     "start": "node --env-file-if-exists=../../.env dist/index.js",
-    "db:migrate": "tsx --env-file-if-exists=../../.env scripts/migrate.ts",
-    "lint": "eslint src scripts test",
+    "lint": "eslint src test",
     "typecheck": "tsc -p tsconfig.json",
-    "test": "tsx --env-file-if-exists=../../.env scripts/migrate.ts && vitest run"
+    "test": "vitest run"
   },
   "dependencies": {
+    "@arena/db": "workspace:*",
     "@arena/shared": "workspace:*",
     "@hono/node-server": "^2.1.8",
     "better-auth": "^1.7.25",
+    "drizzle-orm": "^0.45.4",
     "hono": "^4.13.18",
     "pg": "^8.23.1",
     "zod": "^4.6.7"
@@ -23,7 +24,6 @@
   "devDependencies": {
     "@arena/tsconfig": "workspace:*",
     "@types/node": "^26.6.6",
-    "@types/pg": "^8.23.1",
     "tsup": "^8.5.0",
     "tsx": "^4.23.15",
     "vitest": "^5.1.0"

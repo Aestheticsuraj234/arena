@@ -16,8 +16,8 @@ for HTTPS.
 
 | #   | Chapter                                  | What it adds                                                                                                                        | Status   |
 | --- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| 1   | Project init and authentication setup    | Turborepo + pnpm monorepo (`apps/api`, `apps/web`, `packages/*`), Hono API, Better Auth on web, design system, CI                   | ⏸ Next   |
-| 2   | Database and ORM layer setup             | Drizzle ORM, schema (users, api_keys, languages, submissions, batches, problems, test_cases), migrations, Repository pattern, seed  | Planned  |
+| 1   | Project init and authentication setup    | Turborepo + pnpm monorepo (`apps/api`, `apps/web`, `packages/*`), Hono API, Better Auth on web, design system, CI                   | ✅ Done  |
+| 2   | Database and ORM layer setup             | Drizzle ORM, schema (users, api_keys, languages, submissions, batches, problems, test_cases), migrations, Repository pattern, seed  | ⏸ Next   |
 | 3   | Language runtime images                  | Multi-arch (amd64 + arm64) Docker images for C, C++, Java, JavaScript, TypeScript, Python; `LanguageRunner` (Strategy) + registry   | Planned  |
 | 4   | The executor: running code once          | `Executor` interface + `DockerExecutor` (dockerode): compile, run, stdin/stdout/stderr, exit codes, time and memory; sync `/run`    | Planned  |
 | 5   | Sandbox hardening                        | CPU, memory, timeout, `--network none`, read-only FS, non-root user, pids limit, output cap; tests that attack the runner           | Planned  |

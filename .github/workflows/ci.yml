@@ -34,8 +34,9 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      - run: pnpm smoke
 
-  images:
+  docker:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -46,4 +47,4 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: ./scripts/build-images.sh
-      - run: pnpm --filter @arena/engine test:images
+      - run: pnpm test:docker

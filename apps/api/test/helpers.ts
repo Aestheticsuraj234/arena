@@ -10,6 +10,7 @@ import {
 import {SubmissionProcessor, type SubmissionQueue} from '@arena/queue';
 
 import {createApp} from '../src/app';
+import {MemoryRateLimiter} from '../src/lib/rate-limiter';
 import {createAuth} from '../src/auth';
 import {loadEnv} from '../src/env';
 
@@ -79,7 +80,8 @@ export function createTestContext() {
   const registry = createDefaultRegistry();
   const executor = new FakeExecutor();
   const queue = new InlineQueue(new SubmissionProcessor(new SubmissionRepository(db), executor));
-  const app = createApp({env, db, auth, registry, queue});
+  const rateLimiter = new MemoryRateLimiter(5);
+  const app = createApp({env, db, auth, registry, queue, rateLimiter});
   const origin = {Origin: env.WEB_URL};
 
   /** Signs up a fresh user and returns its `Cookie` header value. */
@@ -95,9 +97,34 @@ export function createTestContext() {
     return {cookie: cookie.split(';')[0] ?? '', email};
   }
 
+  /** Creates an API key for the cookie's user through the API. */
+  async function createApiKey(cookie: string): Promise<string> {
+    const res = await app.request('/v1/api-keys', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', Cookie: cookie},
+      body: JSON.stringify({name: 'test'}),
+    });
+    const body = (await res.json()) as {key: string};
+    return body.key;
+  }
+
   async function seedLanguages() {
     await new LanguageRepository(db).upsertMany(SEED_LANGUAGES);
   }
 
-  return {env, db, pool, auth, registry, executor, queue, app, origin, signUp, seedLanguages};
+  return {
+    env,
+    db,
+    pool,
+    auth,
+    registry,
+    executor,
+    queue,
+    rateLimiter,
+    app,
+    origin,
+    signUp,
+    seedLanguages,
+    createApiKey,
+  };
 }

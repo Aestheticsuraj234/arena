@@ -10,6 +10,7 @@ export function loadSession(auth: Auth) {
     const data = await auth.api.getSession({headers: c.req.raw.headers});
     c.set('user', data?.user ?? null);
     c.set('session', data?.session ?? null);
+    c.set('apiKey', null);
     await next();
   });
 }

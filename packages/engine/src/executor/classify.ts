@@ -49,14 +49,16 @@ export function classifyRun(
   if ((stopped && raw.wallMs >= t.wallLimitMs - WALL_MARGIN_MS) || raw.cpuMs > t.timeLimitMs) {
     return {status: 'time_limit_exceeded', message: `Time limit of ${t.timeLimitMs} ms exceeded`};
   }
+  // Checked before memory: the executor kills a program that overflows its
+  // output, and that SIGKILL must not look like the OOM killer.
+  if (raw.outputTruncated) {
+    return {status: 'output_limit_exceeded', message: 'Output limit exceeded'};
+  }
   if (killed || raw.memoryKb > t.memoryLimitKb) {
     return {
       status: 'memory_limit_exceeded',
       message: `Memory limit of ${Math.round(t.memoryLimitKb / 1024)} MB exceeded`,
     };
-  }
-  if (raw.outputTruncated) {
-    return {status: 'output_limit_exceeded', message: 'Output limit exceeded'};
   }
   if (raw.signal !== null) {
     return {status: 'runtime_error', message: `Killed by ${signalName(raw.signal)}`};

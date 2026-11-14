@@ -5,8 +5,11 @@ import {DEFAULT_LIMITS} from '@arena/shared';
 export type ProcessOutcome = 'finished' | 'skipped';
 
 /** Execution result → the columns stored on the submission. */
-export function toSubmissionResult(result: ExecutionResult): SubmissionResult {
-  const r = toRunResponse(result);
+export function toSubmissionResult(
+  result: ExecutionResult,
+  expectedOutput: string | null = null,
+): SubmissionResult {
+  const r = toRunResponse(result, expectedOutput);
   return {
     status: r.status,
     stdout: r.stdout,
@@ -14,6 +17,7 @@ export function toSubmissionResult(result: ExecutionResult): SubmissionResult {
     compileOutput: r.compileOutput,
     message: r.message,
     exitCode: r.exitCode,
+    signal: r.signal,
     timeMs: r.timeMs,
     memoryKb: r.memoryKb,
   };
@@ -45,7 +49,10 @@ export class SubmissionProcessor {
       await this.submissions.requeue(submissionId);
       throw err;
     }
-    await this.submissions.saveResult(submissionId, toSubmissionResult(result));
+    await this.submissions.saveResult(
+      submissionId,
+      toSubmissionResult(result, submission.expectedOutput),
+    );
     return 'finished';
   }
 

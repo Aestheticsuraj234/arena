@@ -17,6 +17,7 @@ export type SubmissionResult = {status: FinalStatus} & Pick<
   | 'compileOutput'
   | 'message'
   | 'exitCode'
+  | 'signal'
   | 'timeMs'
   | 'memoryKb'
   | 'finishedAt'

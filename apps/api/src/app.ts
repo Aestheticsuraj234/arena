@@ -1,4 +1,5 @@
 import type {Database} from '@arena/db';
+import type {Executor, LanguageRegistry} from '@arena/engine';
 import {Hono} from 'hono';
 import {cors} from 'hono/cors';
 import {logger} from 'hono/logger';
@@ -9,16 +10,20 @@ import type {Env} from './env';
 import {AppError, type ErrorBody} from './lib/errors';
 import {loadSession} from './middleware/session';
 import {healthRoutes} from './routes/health';
+import {languageRoutes} from './routes/languages';
 import {meRoutes} from './routes/me';
+import {runRoutes} from './routes/run';
 
 export interface AppDeps {
   env: Env;
   db: Database;
   auth: Auth;
+  registry: LanguageRegistry;
+  executor: Executor;
 }
 
 /** Builds the HTTP app. Kept free of `listen()` so tests can call it directly. */
-export function createApp({env, db, auth}: AppDeps) {
+export function createApp({env, db, auth, registry, executor}: AppDeps) {
   const app = new Hono<AppEnv>();
 
   if (env.NODE_ENV !== 'test') app.use(logger());
@@ -39,6 +44,8 @@ export function createApp({env, db, auth}: AppDeps) {
 
   app.use('/v1/*', loadSession(auth));
   app.route('/v1/me', meRoutes());
+  app.route('/v1/languages', languageRoutes(db, registry));
+  app.route('/v1/run', runRoutes(db, registry, executor));
 
   app.notFound((c) => {
     const body: ErrorBody = {error: {code: 'not_found', message: 'Route not found'}};

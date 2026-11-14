@@ -31,3 +31,9 @@ export class NotFoundError extends AppError {
 export interface ErrorBody {
   error: {code: string; message: string};
 }
+
+export class ValidationError extends AppError {
+  constructor(message: string) {
+    super(422, 'validation_error', message);
+  }
+}

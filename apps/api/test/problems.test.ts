@@ -117,6 +117,22 @@ describe('POST /v1/problems/:slug/submit', () => {
     expect(((await res.json()) as SubmissionView).tests).toHaveLength(4);
   });
 
+  it('answers 202 with the token at once with ?wait=false', async () => {
+    ctx.queue.paused = true;
+    try {
+      const res = await ctx.app.request('/v1/problems/sum-of-two/submit?wait=false', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', Cookie: cookie},
+        body: JSON.stringify({languageId: 71, sourceCode: 'x'}),
+      });
+      expect(res.status).toBe(202);
+      expect(((await res.json()) as SubmissionView).status).toBe('in_queue');
+    } finally {
+      ctx.queue.paused = false;
+      ctx.queue.pending.length = 0;
+    }
+  });
+
   it('needs a signed-in user', async () => {
     const res = await ctx.app.request('/v1/problems/sum-of-two/submit', {
       method: 'POST',

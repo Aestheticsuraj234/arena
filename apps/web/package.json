@@ -7,16 +7,20 @@
     "dev": "next dev --port 3000",
     "build": "next build",
     "start": "next start --port 3000",
-    "lint": "eslint src",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "lint": "eslint src scripts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "predev": "node scripts/copy-monaco.mjs",
+    "prebuild": "node scripts/copy-monaco.mjs"
   },
   "dependencies": {
     "@arena/shared": "workspace:*",
+    "@monaco-editor/react": "^4.7.0",
     "better-auth": "^1.7.25",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "geist": "^1.9.2",
     "lucide-react": "^1.73.0",
+    "monaco-editor": "^0.57.0",
     "next": "^16.4.6",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

@@ -56,6 +56,8 @@ export function problemRoutes(service: SubmissionService, waitMs: number) {
         timeLimitMs: problem.timeLimitMs,
         memoryLimitKb: problem.memoryLimitKb,
       });
+      // `?wait=false` answers at once, for clients that follow the SSE stream.
+      if (c.req.query('wait') === 'false') return c.json(await service.view(created), 202);
       const latest = await service.waitForResult(created, waitMs);
       return c.json(await service.view(latest), isFinalStatus(latest.status) ? 200 : 202);
     });

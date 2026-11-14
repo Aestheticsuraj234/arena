@@ -1,6 +1,6 @@
 import type {Database} from '@arena/db';
 import type {LanguageRegistry} from '@arena/engine';
-import type {SubmissionQueue} from '@arena/queue';
+import type {SubmissionEvents, SubmissionQueue} from '@arena/queue';
 import {Hono} from 'hono';
 import {cors} from 'hono/cors';
 import {logger} from 'hono/logger';
@@ -28,10 +28,11 @@ export interface AppDeps {
   registry: LanguageRegistry;
   queue: SubmissionQueue;
   rateLimiter: RateLimiter;
+  events: SubmissionEvents;
 }
 
 /** Builds the HTTP app. Kept free of `listen()` so tests can call it directly. */
-export function createApp({env, db, auth, registry, queue, rateLimiter}: AppDeps) {
+export function createApp({env, db, auth, registry, queue, rateLimiter, events}: AppDeps) {
   const app = new Hono<AppEnv>();
   const submissions = new SubmissionService(db, registry, queue);
 
@@ -56,7 +57,7 @@ export function createApp({env, db, auth, registry, queue, rateLimiter}: AppDeps
   app.route('/v1/me', meRoutes());
   app.route('/v1/languages', languageRoutes(db, registry));
   app.route('/v1/run', runRoutes(submissions, env.RUN_WAIT_MS));
-  app.route('/v1/submissions', submissionRoutes(submissions));
+  app.route('/v1/submissions', submissionRoutes(submissions, events));
   app.route('/v1/api-keys', apiKeyRoutes(db));
   app.route('/v1/problems', problemRoutes(submissions, env.RUN_WAIT_MS));
 

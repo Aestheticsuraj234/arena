@@ -1,6 +1,11 @@
 import {createDb, ProblemRepository, SubmissionRepository} from '@arena/db';
 import {createDefaultRegistry, DockerExecutor} from '@arena/engine';
-import {createRedis, createSubmissionWorker, SubmissionProcessor} from '@arena/queue';
+import {
+  createRedis,
+  createSubmissionWorker,
+  RedisSubmissionEvents,
+  SubmissionProcessor,
+} from '@arena/queue';
 
 import {loadWorkerEnv} from './env';
 
@@ -16,12 +21,17 @@ if (missing.length > 0) {
 }
 
 const connection = createRedis(env.REDIS_URL);
+const publisher = createRedis(env.REDIS_URL);
+const events = new RedisSubmissionEvents(publisher);
 const worker = createSubmissionWorker({
   connection,
   processor: new SubmissionProcessor(
     new SubmissionRepository(db),
     new ProblemRepository(db),
     executor,
+    {
+      events,
+    },
   ),
   concurrency: env.WORKER_CONCURRENCY,
   log: (message) => console.log(message),
@@ -33,6 +43,7 @@ async function shutdown(signal: string) {
   console.log(`${signal} received: finishing running submissions`);
   await worker.close(); // waits for active jobs
   await connection.quit();
+  await publisher.quit();
   await pool.end();
   process.exit(0);
 }

@@ -14,8 +14,10 @@
     "test": "turbo run test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "db:migrate": "pnpm --filter @arena/api db:migrate",
-    "setup": "docker compose up -d && pnpm db:migrate"
+    "db:migrate": "pnpm --filter @arena/db db:migrate",
+    "setup": "docker compose up -d && pnpm db:migrate && pnpm db:seed",
+    "db:seed": "pnpm --filter @arena/db db:seed",
+    "db:generate": "pnpm --filter @arena/db db:generate"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

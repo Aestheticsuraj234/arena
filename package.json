@@ -21,7 +21,9 @@
     "images:build": "./scripts/build-images.sh",
     "test:images": "pnpm --filter @arena/engine test:images",
     "smoke": "./scripts/smoke-api.sh",
-    "test:docker": "pnpm --filter @arena/engine test:docker"
+    "test:docker": "pnpm --filter @arena/engine test:docker",
+    "e2e": "pnpm --filter @arena/e2e e2e",
+    "load-test": "node tests/load/judge-load.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -30,6 +32,7 @@
     "prettier": "^3.10.1",
     "turbo": "^2.11.11",
     "typescript": "~6.0.3",
-    "typescript-eslint": "^8.72.2"
+    "typescript-eslint": "^8.72.2",
+    "vite": "^8.3.8"
   }
 }

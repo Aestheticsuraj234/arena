@@ -1,0 +1,22 @@
+# Two sites: the web app and the API (Judge0 paths like /submissions would
+# clash with the web app's pages, so they live on their own hostname).
+# A plain hostname gets automatic HTTPS; prefix with http:// to serve HTTP only.
+{
+	email {$ACME_EMAIL:admin@example.com}
+}
+
+{$WEB_ADDRESS} {
+	encode zstd gzip
+	reverse_proxy web:3000
+}
+
+{$API_ADDRESS} {
+	encode zstd gzip
+	# Prometheus scrapes the API on the internal network, never through here.
+	@internal path /metrics
+	respond @internal 404
+	reverse_proxy api:4000 {
+		# Send SSE events as soon as they are written.
+		flush_interval -1
+	}
+}

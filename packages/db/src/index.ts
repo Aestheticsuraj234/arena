@@ -3,6 +3,7 @@ export * from './repositories/api-key-repository';
 export * from './repositories/language-repository';
 export * from './repositories/problem-repository';
 export * from './repositories/submission-repository';
+export * from './setup';
 export * from './submission-state';
 export * as schema from './schema';
 export type {Difficulty, SubmissionStatus} from './schema';

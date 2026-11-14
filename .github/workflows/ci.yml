@@ -52,3 +52,14 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: ./scripts/build-images.sh
       - run: pnpm test:docker
+
+  images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build production images
+        run: |
+          for target in api worker web; do
+            docker buildx build -f docker/Dockerfile --target "$target" -t "arena-$target:ci" .
+          done

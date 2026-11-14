@@ -32,7 +32,11 @@ export function createAuth(env: Env, db: Database) {
     },
     advanced: {
       // Secure cookies need HTTPS, which local development does not have.
-      useSecureCookies: env.NODE_ENV === 'production',
+      useSecureCookies: env.NODE_ENV === 'production' && env.API_URL.startsWith('https://'),
+      // Web and API on sibling subdomains share the session cookie.
+      ...(env.COOKIE_DOMAIN
+        ? {crossSubDomainCookies: {enabled: true, domain: env.COOKIE_DOMAIN}}
+        : {}),
     },
   });
 }

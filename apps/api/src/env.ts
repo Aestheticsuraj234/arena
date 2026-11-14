@@ -1,5 +1,9 @@
 import {z} from 'zod';
 
+/** Compose and many hosts pass unset variables as "". Treat that as unset. */
+const optional = <T extends z.ZodType>(schema: T) =>
+  z.preprocess((v) => (v === '' ? undefined : v), schema.optional());
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   API_PORT: z.coerce.number().int().positive().default(4000),
@@ -11,8 +15,13 @@ const envSchema = z.object({
   RUN_WAIT_MS: z.coerce.number().int().positive().default(30_000),
   /** Submissions per API key per minute on the Judge0 API. */
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(120),
+  /**
+   * Parent domain for the session cookie when web and API use different
+   * subdomains, e.g. `arena.example.com` for web + `api.arena.example.com`.
+   */
+  COOKIE_DOMAIN: optional(z.string().min(1)),
   /** If set, `GET /metrics` requires `Authorization: Bearer <token>`. */
-  METRICS_TOKEN: z.string().min(16).optional(),
+  METRICS_TOKEN: optional(z.string().min(16)),
   BETTER_AUTH_SECRET: z
     .string()
     .min(32, {message: 'BETTER_AUTH_SECRET must be at least 32 characters'}),

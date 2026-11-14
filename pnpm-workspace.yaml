@@ -1,7 +1,11 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+  - 'tests/*'
 
 onlyBuiltDependencies:
   - esbuild
   - sharp
+
+# Peers must be explicit: optional peers (better-auth → next, drizzle-kit…) stay out of production images.
+autoInstallPeers: false

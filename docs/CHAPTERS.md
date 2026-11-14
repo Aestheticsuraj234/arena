@@ -26,8 +26,8 @@ for HTTPS.
 | 8   | Batch submissions and verdicts           | Up to 20 runs per batch, test cases, output checker, verdicts (Accepted, Wrong Answer, TLE, MLE, Runtime Error, Compile Error)      | ✅ Done  |
 | 9   | Real-time results                        | Live run status over Server-Sent Events, fed by Redis pub/sub from the workers                                                      | ✅ Done  |
 | 10  | Monaco playground and problems UI        | Web editor with language picker, run with custom input, submit against test cases, results panel, submission history                | ✅ Done  |
-| 11  | Observability                            | Structured logs (pino), health checks, Prometheus metrics (queue depth, run time, verdicts), Grafana dashboard                      | ⏸ Next   |
-| 12  | Deployment, load testing and final setup | Production Docker Compose, Caddy HTTPS, setup script, load test, final README so anyone can run it locally or on a VPS              | Planned  |
+| 11  | Observability                            | Structured logs (pino), health checks, Prometheus metrics (queue depth, run time, verdicts), Grafana dashboard                      | ✅ Done  |
+| 12  | Deployment, load testing and final setup | Production Docker Compose, Caddy HTTPS, setup script, load test, final README so anyone can run it locally or on a VPS              | ⏸ Next   |
 | ★   | Bonus: Firecracker executor              | `FirecrackerExecutor` behind the same `Executor` interface, with automatic fallback to Docker                                       | Optional |
 
 ## Every chapter ships with

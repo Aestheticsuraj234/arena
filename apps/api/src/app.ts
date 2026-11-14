@@ -1,9 +1,9 @@
 import type {Database} from '@arena/db';
 import type {LanguageRegistry} from '@arena/engine';
 import type {SubmissionEvents, SubmissionQueue} from '@arena/queue';
+import type {ApiMetrics, Logger, Registry} from '@arena/telemetry';
 import {Hono} from 'hono';
 import {cors} from 'hono/cors';
-import {logger} from 'hono/logger';
 
 import type {AppEnv} from './app-env';
 import type {Auth} from './auth';
@@ -11,9 +11,11 @@ import type {Env} from './env';
 import {judge0Routes} from './judge0/routes';
 import {AppError, type ErrorBody} from './lib/errors';
 import type {RateLimiter} from './lib/rate-limiter';
+import {observe} from './middleware/observe';
 import {loadSession} from './middleware/session';
 import {apiKeyRoutes} from './routes/api-keys';
 import {healthRoutes} from './routes/health';
+import {opsRoutes} from './routes/ops';
 import {languageRoutes} from './routes/languages';
 import {meRoutes} from './routes/me';
 import {problemRoutes} from './routes/problems';
@@ -29,14 +31,19 @@ export interface AppDeps {
   queue: SubmissionQueue;
   rateLimiter: RateLimiter;
   events: SubmissionEvents;
+  logger: Logger;
+  metrics: {registry: Registry; api: ApiMetrics};
+  /** Extra readiness checks (Redis…), keyed by name. */
+  readiness?: Record<string, () => Promise<boolean>>;
 }
 
 /** Builds the HTTP app. Kept free of `listen()` so tests can call it directly. */
-export function createApp({env, db, auth, registry, queue, rateLimiter, events}: AppDeps) {
+export function createApp(deps: AppDeps) {
+  const {env, db, auth, registry, queue, rateLimiter, events, logger, metrics} = deps;
   const app = new Hono<AppEnv>();
-  const submissions = new SubmissionService(db, registry, queue);
+  const submissions = new SubmissionService(db, registry, queue, metrics.api);
 
-  if (env.NODE_ENV !== 'test') app.use(logger());
+  app.use('*', observe(logger, metrics.api));
 
   app.use(
     '*',
@@ -52,6 +59,15 @@ export function createApp({env, db, auth, registry, queue, rateLimiter, events}:
   app.on(['GET', 'POST'], '/api/auth/*', (c) => auth.handler(c.req.raw));
 
   app.route('/health', healthRoutes(db));
+  app.route(
+    '/',
+    opsRoutes({
+      db,
+      metrics: metrics.registry,
+      token: env.METRICS_TOKEN,
+      checks: deps.readiness ?? {},
+    }),
+  );
 
   app.use('/v1/*', loadSession(auth));
   app.route('/v1/me', meRoutes());
@@ -77,7 +93,7 @@ export function createApp({env, db, auth, registry, queue, rateLimiter, events}:
       const body: ErrorBody = {error: {code: err.code, message: err.message}};
       return c.json(body, err.status);
     }
-    console.error(err);
+    c.get('log').error({err}, 'unhandled error');
     const body: ErrorBody = {error: {code: 'internal', message: 'Something went wrong'}};
     return c.json(body, 500);
   });

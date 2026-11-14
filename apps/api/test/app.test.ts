@@ -8,7 +8,8 @@ import {createApp} from '../src/app';
 import type {ErrorBody} from '../src/lib/errors';
 import {createTestContext} from './helpers';
 
-const {env, pool, auth, app, origin, registry, queue, rateLimiter, events} = createTestContext();
+const {env, pool, auth, app, origin, registry, queue, rateLimiter, events, logger, metrics} =
+  createTestContext();
 
 afterAll(async () => {
   await pool.end();
@@ -30,7 +31,17 @@ describe('GET /health', () => {
 
   it('returns 503 when the database is unreachable', async () => {
     const dead = createDb('postgres://postgres@127.0.0.1:1/none');
-    const deadApp = createApp({env, db: dead.db, auth, registry, queue, rateLimiter, events});
+    const deadApp = createApp({
+      env,
+      db: dead.db,
+      auth,
+      registry,
+      queue,
+      rateLimiter,
+      events,
+      logger,
+      metrics,
+    });
     const res = await deadApp.request('/health');
     expect(res.status).toBe(503);
     const body = (await res.json()) as HealthResponse;

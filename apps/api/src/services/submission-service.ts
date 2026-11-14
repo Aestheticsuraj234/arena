@@ -10,10 +10,15 @@ import {
 import type {LanguageRegistry} from '@arena/engine';
 import type {SubmissionQueue} from '@arena/queue';
 import {DEFAULT_LIMITS, type SubmissionView, type TestResultView} from '@arena/shared';
+import type {ApiMetrics} from '@arena/telemetry';
 
 import {ValidationError} from '../lib/errors';
 
+/** Where a submission came from, for metrics. */
+export type SubmissionSource = 'web' | 'judge0' | 'problem';
+
 export interface NewRun {
+  source: SubmissionSource;
   userId: string | null;
   apiKeyId?: string | null;
   languageId: number;
@@ -37,6 +42,7 @@ export class SubmissionService {
     db: Database,
     private readonly registry: LanguageRegistry,
     private readonly queue: SubmissionQueue,
+    private readonly metrics?: ApiMetrics,
   ) {
     this.languages = new LanguageRepository(db);
     this.submissions = new SubmissionRepository(db);
@@ -68,6 +74,12 @@ export class SubmissionService {
       })),
     );
     await this.queue.enqueue(created.map((s) => s.id));
+    for (const run of runs) {
+      this.metrics?.submissionsCreated.inc({
+        language: this.registry.get(run.languageId).slug,
+        source: run.source,
+      });
+    }
     return created;
   }
 

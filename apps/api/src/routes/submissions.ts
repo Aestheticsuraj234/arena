@@ -28,7 +28,7 @@ export function submissionRoutes(
       const user = c.get('user');
       if (!user) throw new UnauthorizedError();
       const body = await parseBody(c, createSubmissionSchema);
-      const created = await service.create({userId: user.id, ...body});
+      const created = await service.create({source: 'web', userId: user.id, ...body});
       return c.json({token: created.token, status: created.status}, 201);
     })
     .get('/', async (c) => {

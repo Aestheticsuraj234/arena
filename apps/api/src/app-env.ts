@@ -1,4 +1,5 @@
 import type {ApiKey} from '@arena/db';
+import type {Logger} from '@arena/telemetry';
 
 import type {SessionData} from './auth';
 
@@ -8,5 +9,7 @@ export interface AppEnv {
     user: SessionData['user'] | null;
     session: SessionData['session'] | null;
     apiKey: ApiKey | null;
+    requestId: string;
+    log: Logger;
   };
 }

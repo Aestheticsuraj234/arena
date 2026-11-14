@@ -1,0 +1,36 @@
+groups:
+  - name: arena
+    rules:
+      - alert: ArenaWorkerDown
+        expr: up{job="arena-worker"} == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: A worker is not answering /metrics; submissions will queue up.
+
+      - alert: ArenaQueueBacklog
+        expr: max(arena_queue_depth) > 50
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: More than 50 submissions waiting for 5 minutes. Add workers or concurrency.
+
+      - alert: ArenaApiErrors
+        expr: sum(rate(arena_http_requests_total{status=~"5.."}[5m])) / sum(rate(arena_http_requests_total[5m])) > 0.05
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: More than 5% of API requests fail with 5xx.
+
+      - alert: ArenaExecutionFailures
+        expr: increase(arena_execution_failures_total{final="true"}[15m]) > 0
+        labels: {severity: critical}
+        annotations:
+          summary: Submissions ended as internal errors after all retries (is Docker healthy?).
+
+      - alert: ArenaSlowExecutions
+        expr: histogram_quantile(0.95, sum by (le) (rate(arena_execution_duration_seconds_bucket[10m]))) > 10
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: p95 time from claim to verdict is over 10 s.

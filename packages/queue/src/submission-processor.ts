@@ -9,12 +9,15 @@ import {
   judgeTests,
   stopAtFirstFailure,
   toRunResponse,
+  verdictForRun,
   type ExecutionJob,
   type ExecutionResult,
   type Executor,
   type JudgeResult,
 } from '@arena/engine';
-import {DEFAULT_LIMITS} from '@arena/shared';
+import {DEFAULT_LIMITS, type SubmissionEvent} from '@arena/shared';
+
+import {NO_EVENTS, type SubmissionEvents} from './submission-events';
 
 export type ProcessOutcome = 'finished' | 'skipped';
 
@@ -60,13 +63,26 @@ export function toProblemResult(judged: JudgeResult): SubmissionResult {
  * has one input; a problem submission runs its test cases in one sandbox and
  * stops at the first failure.
  */
+export interface ProcessorOptions {
+  /** Live events for SSE (Chapter 9). Optional: nothing is published without it. */
+  events?: Pick<SubmissionEvents, 'publish'>;
+  /** A `processing` row older than this may be claimed again. */
+  staleAfterMs?: number;
+}
+
 export class SubmissionProcessor {
+  private readonly events: Pick<SubmissionEvents, 'publish'>;
+  private readonly staleAfterMs: number;
+
   constructor(
     private readonly submissions: SubmissionRepository,
     private readonly problems: ProblemRepository,
     private readonly executor: Executor,
-    private readonly staleAfterMs = 5 * 60_000,
-  ) {}
+    options: ProcessorOptions = {},
+  ) {
+    this.events = options.events ?? NO_EVENTS;
+    this.staleAfterMs = options.staleAfterMs ?? 5 * 60_000;
+  }
 
   async process(submissionId: string): Promise<ProcessOutcome> {
     const claimed = await this.submissions.markProcessing(submissionId, this.staleAfterMs);
@@ -74,6 +90,7 @@ export class SubmissionProcessor {
 
     const submission = await this.submissions.findById(submissionId);
     if (!submission) return 'skipped';
+    this.emit({type: 'status', token: submission.token, status: 'processing'});
 
     try {
       if (submission.problemId) await this.judgeProblem(submission, submission.problemId);
@@ -89,31 +106,51 @@ export class SubmissionProcessor {
   /** Called after the last retry failed. */
   async giveUp(submissionId: string, reason: string): Promise<void> {
     await this.submissions.failPermanently(submissionId, `Execution failed: ${reason}`);
+    const s = await this.submissions.findById(submissionId);
+    if (s) this.emit({type: 'done', token: s.token, status: 'internal_error'});
+  }
+
+  /** Events are best effort: a lost event never fails a submission. */
+  private emit(event: SubmissionEvent): void {
+    void this.events.publish(event).catch(() => undefined);
+  }
+
+  private async finish(s: Submission, result: SubmissionResult): Promise<void> {
+    const saved = await this.submissions.saveResult(s.id, result);
+    if (saved) this.emit({type: 'done', token: s.token, status: result.status});
   }
 
   private async runPlain(s: Submission): Promise<void> {
     const result = await this.executor.execute(this.job(s, [s.stdin ?? '']));
-    await this.submissions.saveResult(s.id, toSubmissionResult(result, s.expectedOutput));
+    await this.finish(s, toSubmissionResult(result, s.expectedOutput));
   }
 
   private async judgeProblem(s: Submission, problemId: string): Promise<void> {
     const problem = await this.problems.findById(problemId);
     if (!problem) {
-      await this.submissions.saveResult(s.id, {
-        status: 'internal_error',
-        message: 'Problem not found',
-      });
+      await this.finish(s, {status: 'internal_error', message: 'Problem not found'});
       return;
     }
     const tests: TestCase[] = s.sampleOnly
       ? problem.testCases.filter((t) => t.isSample)
       : problem.testCases;
+    const stop = stopAtFirstFailure(tests);
     const result = await this.executor.execute({
       ...this.job(
         s,
         tests.map((t) => t.input),
       ),
-      afterRun: stopAtFirstFailure(tests),
+      afterRun: (run, i) => {
+        this.emit({
+          type: 'test',
+          token: s.token,
+          position: i,
+          status: verdictForRun(run, tests[i]?.expectedOutput ?? ''),
+          timeMs: run.timeMs,
+          total: tests.length,
+        });
+        return stop(run, i);
+      },
     });
     const judged = judgeTests(result, tests);
     await this.submissions.saveTestResults(
@@ -132,7 +169,7 @@ export class SubmissionProcessor {
         };
       }),
     );
-    await this.submissions.saveResult(s.id, toProblemResult(judged));
+    await this.finish(s, toProblemResult(judged));
   }
 
   private job(s: Submission, inputs: string[]): ExecutionJob {

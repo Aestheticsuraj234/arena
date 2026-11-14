@@ -96,3 +96,16 @@ export interface TestResultView {
   /** Only for sample tests; hidden tests never reveal their data. */
   sample: {input: string; expectedOutput: string; stdout: string | null} | null;
 }
+
+/** Live events for one submission, sent over `GET /v1/submissions/:token/events`. */
+export type SubmissionEvent =
+  | {type: 'status'; token: string; status: SubmissionState}
+  | {
+      type: 'test';
+      token: string;
+      position: number;
+      status: TestResultView['status'];
+      timeMs: number | null;
+      total: number;
+    }
+  | {type: 'done'; token: string; status: RunVerdict};

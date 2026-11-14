@@ -113,6 +113,7 @@ describe('SubmissionRepository', () => {
 
   it('saves a result and sets finishedAt', async () => {
     const created = await submissions.create(base);
+    await submissions.markProcessing(created.id);
     const saved = await submissions.saveResult(created.id, {
       status: 'accepted',
       stdout: '1\n',
@@ -121,7 +122,39 @@ describe('SubmissionRepository', () => {
       memoryKb: 9000,
     });
     expect(saved).toMatchObject({status: 'accepted', stdout: '1\n', timeMs: 12});
-    expect(saved.finishedAt).toBeInstanceOf(Date);
+    expect(saved?.finishedAt).toBeInstanceOf(Date);
+  });
+
+  it('never overwrites a final verdict', async () => {
+    const created = await submissions.create(base);
+    await submissions.markProcessing(created.id);
+    await submissions.saveResult(created.id, {status: 'accepted'});
+    expect(await submissions.saveResult(created.id, {status: 'runtime_error'})).toBeUndefined();
+    expect((await submissions.findById(created.id))?.status).toBe('accepted');
+  });
+
+  it('requeues a failed attempt so a retry can claim it', async () => {
+    const created = await submissions.create(base);
+    await submissions.markProcessing(created.id);
+    await submissions.requeue(created.id);
+    expect(await submissions.markProcessing(created.id)).toBe(true);
+  });
+
+  it('reclaims a submission whose worker died', async () => {
+    const created = await submissions.create(base);
+    await submissions.markProcessing(created.id);
+    expect(await submissions.markProcessing(created.id, 60_000)).toBe(false);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(await submissions.markProcessing(created.id, 10)).toBe(true);
+  });
+
+  it('fails a submission permanently', async () => {
+    const created = await submissions.create(base);
+    await submissions.failPermanently(created.id, 'Docker is down');
+    expect(await submissions.findById(created.id)).toMatchObject({
+      status: 'internal_error',
+      message: 'Docker is down',
+    });
   });
 
   it('returns batch lookups in request order', async () => {

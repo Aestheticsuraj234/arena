@@ -1,7 +1,8 @@
-import {and, asc, desc, eq, inArray} from 'drizzle-orm';
+import {and, asc, desc, eq, inArray, lt, or} from 'drizzle-orm';
 
 import type {Database} from '../client';
 import {submissions, testResults} from '../schema';
+import type {FinalStatus} from '../submission-state';
 
 export type Submission = typeof submissions.$inferSelect;
 export type NewSubmission = typeof submissions.$inferInsert;
@@ -9,9 +10,8 @@ export type TestResult = typeof testResults.$inferSelect;
 export type NewTestResult = typeof testResults.$inferInsert;
 
 /** Fields a worker writes when a run finishes. */
-export type SubmissionResult = Pick<
+export type SubmissionResult = {status: FinalStatus} & Pick<
   NewSubmission,
-  | 'status'
   | 'stdout'
   | 'stderr'
   | 'compileOutput'
@@ -67,25 +67,55 @@ export class SubmissionRepository {
 
   /**
    * Moves a queued submission to `processing`. Returns false when another
-   * worker already took it, so a job is never run twice.
+   * worker already has it, so a job never runs twice. A submission stuck in
+   * `processing` for longer than `staleAfterMs` (its worker crashed) can be
+   * claimed again.
    */
-  async markProcessing(id: string): Promise<boolean> {
+  async markProcessing(id: string, staleAfterMs = 5 * 60_000): Promise<boolean> {
+    const staleBefore = new Date(Date.now() - staleAfterMs);
     const rows = await this.db
       .update(submissions)
       .set({status: 'processing', startedAt: new Date()})
-      .where(and(eq(submissions.id, id), eq(submissions.status, 'in_queue')))
+      .where(
+        and(
+          eq(submissions.id, id),
+          or(
+            eq(submissions.status, 'in_queue'),
+            and(eq(submissions.status, 'processing'), lt(submissions.startedAt, staleBefore)),
+          ),
+        ),
+      )
       .returning({id: submissions.id});
     return rows.length === 1;
   }
 
-  async saveResult(id: string, result: SubmissionResult): Promise<Submission> {
+  /** Puts a `processing` submission back in the queue after a worker error. */
+  async requeue(id: string): Promise<void> {
+    await this.db
+      .update(submissions)
+      .set({status: 'in_queue', startedAt: null})
+      .where(and(eq(submissions.id, id), eq(submissions.status, 'processing')));
+  }
+
+  /**
+   * Stores the final result. Only a `processing` submission can finish, so a
+   * late duplicate can never overwrite a verdict. Returns undefined otherwise.
+   */
+  async saveResult(id: string, result: SubmissionResult): Promise<Submission | undefined> {
     const [row] = await this.db
       .update(submissions)
       .set({...result, finishedAt: result.finishedAt ?? new Date()})
-      .where(eq(submissions.id, id))
+      .where(and(eq(submissions.id, id), eq(submissions.status, 'processing')))
       .returning();
-    if (!row) throw new Error(`Submission ${id} not found`);
     return row;
+  }
+
+  /** Marks a submission as failed for good, whatever its current state. */
+  async failPermanently(id: string, message: string): Promise<void> {
+    await this.db
+      .update(submissions)
+      .set({status: 'internal_error', message, finishedAt: new Date()})
+      .where(and(eq(submissions.id, id), inArray(submissions.status, ['in_queue', 'processing'])));
   }
 
   async saveTestResults(rows: NewTestResult[]): Promise<void> {

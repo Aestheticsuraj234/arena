@@ -1,0 +1,26 @@
+{
+  "name": "@arena/queue",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint src test",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@arena/db": "workspace:*",
+    "@arena/engine": "workspace:*",
+    "@arena/shared": "workspace:*",
+    "bullmq": "^6.7.6",
+    "ioredis": "^6.0.0"
+  },
+  "devDependencies": {
+    "@arena/tsconfig": "workspace:*",
+    "@types/node": "^26.6.6",
+    "vitest": "^5.1.0"
+  }
+}

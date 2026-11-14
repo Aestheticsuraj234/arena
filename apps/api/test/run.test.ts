@@ -1,5 +1,5 @@
 import {SEED_LANGUAGES} from '@arena/db';
-import type {LanguageInfo, RunResponse} from '@arena/shared';
+import type {LanguageInfo, SubmissionView} from '@arena/shared';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 
 import type {ErrorBody} from '../src/lib/errors';
@@ -52,8 +52,9 @@ describe('POST /v1/run', () => {
   it('runs the code with default limits and maps ok to accepted', async () => {
     const res = await run({languageId: 71, sourceCode: 'print(1)', stdin: 'x'});
     expect(res.status).toBe(200);
-    const body = (await res.json()) as RunResponse;
+    const body = (await res.json()) as SubmissionView;
     expect(body).toMatchObject({status: 'accepted', stdout: 'fake\n', exitCode: 0});
+    expect(body.token).toMatch(/^[0-9a-f-]{36}$/);
     expect(ctx.executor.jobs.at(-1)).toMatchObject({
       languageId: 71,
       inputs: ['x'],
@@ -66,7 +67,7 @@ describe('POST /v1/run', () => {
       compile: {success: false, output: 'main.c:1: error', exitCode: 1, timeMs: 30},
       runs: [],
     };
-    const body = (await (await run({languageId: 50, sourceCode: 'x'})).json()) as RunResponse;
+    const body = (await (await run({languageId: 50, sourceCode: 'x'})).json()) as SubmissionView;
     expect(body).toMatchObject({status: 'compilation_error', compileOutput: 'main.c:1: error'});
   });
 
@@ -79,6 +80,17 @@ describe('POST /v1/run', () => {
   it('rejects empty source and out-of-range limits', async () => {
     expect((await run({languageId: 71, sourceCode: ''})).status).toBe(422);
     expect((await run({languageId: 71, sourceCode: 'x', timeLimitMs: 60_000})).status).toBe(422);
+  });
+
+  it('answers 202 with the token when the verdict takes too long', async () => {
+    ctx.queue.paused = true;
+    try {
+      const res = await run({languageId: 71, sourceCode: 'print(1)'});
+      expect(res.status).toBe(202);
+      expect(((await res.json()) as SubmissionView).status).toBe('in_queue');
+    } finally {
+      ctx.queue.paused = false;
+    }
   });
 
   it('rejects a body that is not JSON', async () => {

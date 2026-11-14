@@ -1,5 +1,6 @@
 import type {Database} from '@arena/db';
-import type {Executor, LanguageRegistry} from '@arena/engine';
+import type {LanguageRegistry} from '@arena/engine';
+import type {SubmissionQueue} from '@arena/queue';
 import {Hono} from 'hono';
 import {cors} from 'hono/cors';
 import {logger} from 'hono/logger';
@@ -13,18 +14,21 @@ import {healthRoutes} from './routes/health';
 import {languageRoutes} from './routes/languages';
 import {meRoutes} from './routes/me';
 import {runRoutes} from './routes/run';
+import {submissionRoutes} from './routes/submissions';
+import {SubmissionService} from './services/submission-service';
 
 export interface AppDeps {
   env: Env;
   db: Database;
   auth: Auth;
   registry: LanguageRegistry;
-  executor: Executor;
+  queue: SubmissionQueue;
 }
 
 /** Builds the HTTP app. Kept free of `listen()` so tests can call it directly. */
-export function createApp({env, db, auth, registry, executor}: AppDeps) {
+export function createApp({env, db, auth, registry, queue}: AppDeps) {
   const app = new Hono<AppEnv>();
+  const submissions = new SubmissionService(db, registry, queue);
 
   if (env.NODE_ENV !== 'test') app.use(logger());
 
@@ -45,7 +49,8 @@ export function createApp({env, db, auth, registry, executor}: AppDeps) {
   app.use('/v1/*', loadSession(auth));
   app.route('/v1/me', meRoutes());
   app.route('/v1/languages', languageRoutes(db, registry));
-  app.route('/v1/run', runRoutes(db, registry, executor));
+  app.route('/v1/run', runRoutes(submissions, env.RUN_WAIT_MS));
+  app.route('/v1/submissions', submissionRoutes(submissions));
 
   app.notFound((c) => {
     const body: ErrorBody = {error: {code: 'not_found', message: 'Route not found'}};

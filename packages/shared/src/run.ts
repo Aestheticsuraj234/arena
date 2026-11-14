@@ -59,3 +59,23 @@ export interface LanguageInfo {
   name: string;
   version: string;
 }
+
+/** Body of `POST /v1/submissions`: a run that is queued, not awaited. */
+export const createSubmissionSchema = runRequestSchema.extend({
+  expectedOutput: z.string().max(MAX_STDIN_LENGTH).optional(),
+});
+
+export type CreateSubmissionRequest = z.input<typeof createSubmissionSchema>;
+
+export type SubmissionState = 'in_queue' | 'processing' | RunVerdict;
+
+/** A stored submission, as returned by `GET /v1/submissions/:token`. */
+export interface SubmissionView extends Omit<RunResponse, 'status'> {
+  token: string;
+  status: SubmissionState;
+  languageId: number;
+  sourceCode: string;
+  stdin: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+}

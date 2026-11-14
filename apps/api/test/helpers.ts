@@ -1,12 +1,13 @@
 import {randomUUID} from 'node:crypto';
 
-import {createDb, LanguageRepository, SEED_LANGUAGES} from '@arena/db';
+import {createDb, LanguageRepository, SEED_LANGUAGES, SubmissionRepository} from '@arena/db';
 import {
   createDefaultRegistry,
   type ExecutionJob,
   type ExecutionResult,
   type Executor,
 } from '@arena/engine';
+import {SubmissionProcessor, type SubmissionQueue} from '@arena/queue';
 
 import {createApp} from '../src/app';
 import {createAuth} from '../src/auth';
@@ -37,6 +38,36 @@ export class FakeExecutor implements Executor {
   }
 }
 
+/**
+ * Runs submissions right away with the real `SubmissionProcessor`, so API tests
+ * cover the full create → claim → execute → save path without Redis or Docker.
+ * `paused` keeps jobs queued, to test the 202 path.
+ */
+export class InlineQueue implements SubmissionQueue {
+  paused = false;
+  readonly pending: string[] = [];
+
+  constructor(private readonly processor: SubmissionProcessor) {}
+
+  async enqueue(ids: readonly string[]): Promise<void> {
+    if (this.paused) {
+      this.pending.push(...ids);
+      return;
+    }
+    for (const id of ids) await this.processor.process(id);
+  }
+
+  async waitUntilFinished(id: string): Promise<boolean> {
+    return !this.pending.includes(id);
+  }
+
+  async depth(): Promise<number> {
+    return this.pending.length;
+  }
+
+  async close(): Promise<void> {}
+}
+
 export function createTestContext() {
   const env = loadEnv({
     ...process.env,
@@ -47,7 +78,8 @@ export function createTestContext() {
   const auth = createAuth(env, db);
   const registry = createDefaultRegistry();
   const executor = new FakeExecutor();
-  const app = createApp({env, db, auth, registry, executor});
+  const queue = new InlineQueue(new SubmissionProcessor(new SubmissionRepository(db), executor));
+  const app = createApp({env, db, auth, registry, queue});
   const origin = {Origin: env.WEB_URL};
 
   /** Signs up a fresh user and returns its `Cookie` header value. */
@@ -67,5 +99,5 @@ export function createTestContext() {
     await new LanguageRepository(db).upsertMany(SEED_LANGUAGES);
   }
 
-  return {env, db, pool, auth, registry, executor, app, origin, signUp, seedLanguages};
+  return {env, db, pool, auth, registry, executor, queue, app, origin, signUp, seedLanguages};
 }

@@ -1,4 +1,4 @@
-import {createDb, SubmissionRepository} from '@arena/db';
+import {createDb, ProblemRepository, SubmissionRepository} from '@arena/db';
 import {createDefaultRegistry, DockerExecutor} from '@arena/engine';
 import {createRedis, createSubmissionWorker, SubmissionProcessor} from '@arena/queue';
 
@@ -18,7 +18,11 @@ if (missing.length > 0) {
 const connection = createRedis(env.REDIS_URL);
 const worker = createSubmissionWorker({
   connection,
-  processor: new SubmissionProcessor(new SubmissionRepository(db), executor),
+  processor: new SubmissionProcessor(
+    new SubmissionRepository(db),
+    new ProblemRepository(db),
+    executor,
+  ),
   concurrency: env.WORKER_CONCURRENCY,
   log: (message) => console.log(message),
 });

@@ -16,6 +16,7 @@ import {apiKeyRoutes} from './routes/api-keys';
 import {healthRoutes} from './routes/health';
 import {languageRoutes} from './routes/languages';
 import {meRoutes} from './routes/me';
+import {problemRoutes} from './routes/problems';
 import {runRoutes} from './routes/run';
 import {submissionRoutes} from './routes/submissions';
 import {SubmissionService} from './services/submission-service';
@@ -57,6 +58,7 @@ export function createApp({env, db, auth, registry, queue, rateLimiter}: AppDeps
   app.route('/v1/run', runRoutes(submissions, env.RUN_WAIT_MS));
   app.route('/v1/submissions', submissionRoutes(submissions));
   app.route('/v1/api-keys', apiKeyRoutes(db));
+  app.route('/v1/problems', problemRoutes(submissions, env.RUN_WAIT_MS));
 
   // Judge0-compatible API at the root: /submissions, /languages, /statuses, /about.
   app.route(

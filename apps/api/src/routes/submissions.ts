@@ -30,7 +30,7 @@ export function submissionRoutes(service: SubmissionService) {
       if (!user) throw new UnauthorizedError();
       const {limit, offset} = pageSchema.parse(c.req.query());
       const rows = await service.submissions.listByUser(user.id, limit, offset);
-      return c.json(rows.map(toSubmissionView));
+      return c.json(rows.map((s) => toSubmissionView(s)));
     })
     .get('/:token', async (c) => {
       const user = c.get('user');
@@ -41,6 +41,6 @@ export function submissionRoutes(service: SubmissionService) {
       if (!submission || submission.userId !== user.id) {
         throw new NotFoundError('Submission not found');
       }
-      return c.json(toSubmissionView(submission));
+      return c.json(await service.view(submission));
     });
 }

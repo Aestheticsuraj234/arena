@@ -219,3 +219,63 @@ describe('/v1/api-keys', () => {
     expect(list).not.toContain(created.key);
   });
 });
+
+describe('Judge0 batch', () => {
+  async function postBatch(key: string, submissions: unknown, query = '') {
+    return ctx.app.request(`/submissions/batch${query}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Auth-Token': key},
+      body: JSON.stringify({submissions}),
+    });
+  }
+
+  it('creates several submissions and reads them back in order', async () => {
+    const key = await newKey();
+    const res = await postBatch(key, [PY, {...PY, stdin: 'x'}]);
+    expect(res.status).toBe(201);
+    const created = (await res.json()) as Array<{token: string}>;
+    expect(created).toHaveLength(2);
+
+    const tokens = [created[1]?.token, 'not-a-token', created[0]?.token].join(',');
+    const got = await ctx.app.request(
+      `/submissions/batch?tokens=${tokens}&fields=token,status_id`,
+      {
+        headers: {'X-Auth-Token': key},
+      },
+    );
+    expect(await got.json()).toEqual({
+      submissions: [
+        {token: created[1]?.token, status_id: 3},
+        null,
+        {token: created[0]?.token, status_id: 3},
+      ],
+    });
+  });
+
+  it('returns per-item errors next to valid tokens', async () => {
+    const res = await postBatch(await newKey(), [PY, {source_code: 'x'}, {...PY, language_id: 1}]);
+    const body = (await res.json()) as Array<Record<string, unknown>>;
+    expect(body[0]).toHaveProperty('token');
+    expect(body[1]).toEqual({language_id: ["can't be blank"]});
+    expect(body[2]).toEqual({language_id: ["language with id 1 doesn't exist"]});
+  });
+
+  it('rejects an empty or oversized batch', async () => {
+    const key = await newKey();
+    expect((await postBatch(key, [])).status).toBe(422);
+    expect(
+      (
+        await postBatch(
+          key,
+          Array.from({length: 21}, () => PY),
+        )
+      ).status,
+    ).toBe(422);
+  });
+
+  it('charges every item against the rate limit', async () => {
+    const key = await newKey();
+    expect((await postBatch(key, [PY, PY, PY, PY])).status).toBe(201);
+    expect((await postBatch(key, [PY, PY])).status).toBe(429);
+  });
+});

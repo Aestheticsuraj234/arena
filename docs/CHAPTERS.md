@@ -23,8 +23,8 @@ for HTTPS.
 | 5   | Sandbox hardening                        | CPU, memory, timeout, `--network none`, read-only FS, non-root user, pids limit, output cap; tests that attack the runner           | ✅ Done  |
 | 6   | Job queue and workers                    | BullMQ queue, new `apps/worker` app, job lifecycle state machine (queued → running → done / failed / timeout), concurrency, retries | ✅ Done  |
 | 7   | Judge0-compatible submissions API        | `POST /submissions`, `GET /submissions/:token`, `wait=true`, status IDs, base64 fields, API keys, rate limiting                     | ✅ Done  |
-| 8   | Batch submissions and verdicts           | Up to 20 runs per batch, test cases, output checker, verdicts (Accepted, Wrong Answer, TLE, MLE, Runtime Error, Compile Error)      | ⏸ Next   |
-| 9   | Real-time results                        | Live run status over Server-Sent Events, fed by Redis pub/sub from the workers                                                      | Planned  |
+| 8   | Batch submissions and verdicts           | Up to 20 runs per batch, test cases, output checker, verdicts (Accepted, Wrong Answer, TLE, MLE, Runtime Error, Compile Error)      | ✅ Done  |
+| 9   | Real-time results                        | Live run status over Server-Sent Events, fed by Redis pub/sub from the workers                                                      | ⏸ Next   |
 | 10  | Monaco playground and problems UI        | Web editor with language picker, run with custom input, submit against test cases, results panel, submission history                | Planned  |
 | 11  | Observability                            | Structured logs (pino), health checks, Prometheus metrics (queue depth, run time, verdicts), Grafana dashboard                      | Planned  |
 | 12  | Deployment, load testing and final setup | Production Docker Compose, Caddy HTTPS, setup script, load test, final README so anyone can run it locally or on a VPS              | Planned  |

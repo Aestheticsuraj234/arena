@@ -28,7 +28,15 @@ export class ProblemRepository {
   /** The problem and all its test cases in order, or undefined. */
   async findBySlug(slug: string): Promise<ProblemWithTests | undefined> {
     const problem = await this.db.query.problems.findFirst({where: eq(problems.slug, slug)});
-    if (!problem) return undefined;
+    return problem ? this.withTests(problem) : undefined;
+  }
+
+  async findById(id: string): Promise<ProblemWithTests | undefined> {
+    const problem = await this.db.query.problems.findFirst({where: eq(problems.id, id)});
+    return problem ? this.withTests(problem) : undefined;
+  }
+
+  private async withTests(problem: Problem): Promise<ProblemWithTests> {
     const tests = await this.db
       .select()
       .from(testCases)

@@ -112,6 +112,7 @@ export class DockerExecutor implements Executor {
         }
         const {outcome, hung} = await this.run(container, runner, input, job.limits);
         runs.push(outcome);
+        if (job.afterRun?.(outcome, i) === 'stop') break;
         alive = !hung;
         // Background processes from this run must not touch the next one.
         if (alive && i < job.inputs.length - 1) await this.killUserProcesses(container);

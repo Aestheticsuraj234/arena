@@ -1,6 +1,13 @@
 import {randomUUID} from 'node:crypto';
 
-import {createDb, LanguageRepository, SEED_LANGUAGES, SubmissionRepository} from '@arena/db';
+import {
+  createDb,
+  LanguageRepository,
+  ProblemRepository,
+  SEED_LANGUAGES,
+  SEED_PROBLEMS,
+  SubmissionRepository,
+} from '@arena/db';
 import {
   createDefaultRegistry,
   type ExecutionJob,
@@ -33,9 +40,29 @@ export class FakeExecutor implements Executor {
     ],
   };
 
+  /** When set, computes stdout per input instead of returning `result`. */
+  solve: ((input: string) => string) | null = null;
+
   async execute(job: ExecutionJob): Promise<ExecutionResult> {
     this.jobs.push(job);
-    return this.result;
+    const solve = this.solve;
+    if (!solve) return this.result;
+    const runs = [];
+    for (const [i, input] of job.inputs.entries()) {
+      const run = {
+        status: 'ok' as const,
+        stdout: solve(input),
+        stderr: '',
+        exitCode: 0,
+        signal: null,
+        timeMs: 10 + i,
+        memoryKb: 2000 + i,
+        message: null,
+      };
+      runs.push(run);
+      if (job.afterRun?.(run, i) === 'stop') break;
+    }
+    return {compile: null, runs};
   }
 }
 
@@ -79,7 +106,9 @@ export function createTestContext() {
   const auth = createAuth(env, db);
   const registry = createDefaultRegistry();
   const executor = new FakeExecutor();
-  const queue = new InlineQueue(new SubmissionProcessor(new SubmissionRepository(db), executor));
+  const queue = new InlineQueue(
+    new SubmissionProcessor(new SubmissionRepository(db), new ProblemRepository(db), executor),
+  );
   const rateLimiter = new MemoryRateLimiter(5);
   const app = createApp({env, db, auth, registry, queue, rateLimiter});
   const origin = {Origin: env.WEB_URL};
@@ -110,6 +139,8 @@ export function createTestContext() {
 
   async function seedLanguages() {
     await new LanguageRepository(db).upsertMany(SEED_LANGUAGES);
+    const problems = new ProblemRepository(db);
+    for (const problem of SEED_PROBLEMS) await problems.upsert(problem);
   }
 
   return {

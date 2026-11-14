@@ -8,3 +8,4 @@ export * from './languages/language-runner';
 export * from './languages/runners';
 export * from './verdict';
 export * from './checker';
+export * from './judge';

@@ -1,5 +1,11 @@
 /** BullMQ queue + worker against real Redis and Postgres, with a fake executor. */
-import {createDb, LanguageRepository, SEED_LANGUAGES, SubmissionRepository} from '@arena/db';
+import {
+  createDb,
+  LanguageRepository,
+  ProblemRepository,
+  SEED_LANGUAGES,
+  SubmissionRepository,
+} from '@arena/db';
 import type {ExecutionJob, ExecutionResult, Executor} from '@arena/engine';
 import type {Worker} from 'bullmq';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
@@ -68,7 +74,7 @@ async function startWorker(executor: Executor, concurrency = 2) {
   await worker?.close();
   worker = createSubmissionWorker({
     connection: createRedis(redisUrl),
-    processor: new SubmissionProcessor(submissions, executor),
+    processor: new SubmissionProcessor(submissions, new ProblemRepository(db), executor),
     concurrency,
   });
   await worker.waitUntilReady();

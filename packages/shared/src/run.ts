@@ -80,4 +80,19 @@ export interface SubmissionView extends Omit<RunResponse, 'status'> {
   stdin: string | null;
   createdAt: string;
   finishedAt: string | null;
+  /** Problem submissions only. */
+  problemSlug: string | null;
+  testsPassed: number | null;
+  testsTotal: number | null;
+  tests: TestResultView[] | null;
+}
+
+/** One test case result inside a problem submission. */
+export interface TestResultView {
+  position: number;
+  status: Exclude<RunVerdict, 'compilation_error'>;
+  timeMs: number | null;
+  memoryKb: number | null;
+  /** Only for sample tests; hidden tests never reveal their data. */
+  sample: {input: string; expectedOutput: string; stdout: string | null} | null;
 }

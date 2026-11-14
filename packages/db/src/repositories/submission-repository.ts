@@ -1,7 +1,7 @@
 import {and, asc, desc, eq, inArray, lt, or} from 'drizzle-orm';
 
 import type {Database} from '../client';
-import {submissions, testResults} from '../schema';
+import {batches, submissions, testResults} from '../schema';
 import type {FinalStatus} from '../submission-state';
 
 export type Submission = typeof submissions.$inferSelect;
@@ -20,6 +20,8 @@ export type SubmissionResult = {status: FinalStatus} & Pick<
   | 'signal'
   | 'timeMs'
   | 'memoryKb'
+  | 'testsPassed'
+  | 'testsTotal'
   | 'finishedAt'
 >;
 
@@ -31,6 +33,13 @@ export class SubmissionRepository {
     const [row] = await this.db.insert(submissions).values(input).returning();
     if (!row) throw new Error('Failed to create submission');
     return row;
+  }
+
+  /** Creates a batch row that groups the submissions of one batch request. */
+  async createBatch(userId: string | null): Promise<string> {
+    const [row] = await this.db.insert(batches).values({userId}).returning({id: batches.id});
+    if (!row) throw new Error('Failed to create batch');
+    return row.id;
   }
 
   async createMany(inputs: NewSubmission[]): Promise<Submission[]> {

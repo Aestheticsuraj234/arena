@@ -93,3 +93,18 @@ describe('DockerExecutor: outcomes', () => {
     expect(after).toBe(before);
   });
 });
+
+describe('DockerExecutor: afterRun', () => {
+  it('stops after the hook says stop', async () => {
+    const seen: number[] = [];
+    const result = await executor.execute({
+      ...job(71, 'print(input())', ['a', 'b', 'c']),
+      afterRun: (_run, i) => {
+        seen.push(i);
+        return i === 1 ? 'stop' : 'continue';
+      },
+    });
+    expect(seen).toEqual([0, 1]);
+    expect(result.runs.map((r) => r.stdout)).toEqual(['a\n', 'b\n']);
+  });
+});

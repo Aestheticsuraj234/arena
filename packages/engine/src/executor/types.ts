@@ -22,6 +22,11 @@ export interface ExecutionJob {
   /** One run per input. A plain run has one input; a problem has one per test. */
   inputs: readonly string[];
   limits: ExecutionLimits;
+  /**
+   * Called after each run. Return `'stop'` to skip the remaining inputs, e.g.
+   * at the first failed test case. Skipped inputs have no entry in `runs`.
+   */
+  afterRun?: (run: RunOutcome, index: number) => 'continue' | 'stop';
 }
 
 export interface CompileOutcome {

@@ -1,4 +1,4 @@
-import {index, integer, pgTable, text, timestamp, uuid} from 'drizzle-orm/pg-core';
+import {boolean, index, integer, pgTable, text, timestamp, uuid} from 'drizzle-orm/pg-core';
 
 import {apiKeys} from './api-keys';
 import {user} from './auth';
@@ -35,6 +35,8 @@ export const submissions = pgTable(
     expectedOutput: text(),
     timeLimitMs: integer().notNull(),
     memoryLimitKb: integer().notNull(),
+    /** Problem submissions only: run just the sample tests ("Run" button). */
+    sampleOnly: boolean().notNull().default(false),
 
     status: submissionStatus().notNull().default('in_queue'),
     stdout: text(),
@@ -46,6 +48,9 @@ export const submissions = pgTable(
     signal: text(),
     timeMs: integer(),
     memoryKb: integer(),
+    /** Problem submissions only. */
+    testsPassed: integer(),
+    testsTotal: integer(),
 
     createdAt: timestamp({withTimezone: true}).notNull().defaultNow(),
     startedAt: timestamp({withTimezone: true}),

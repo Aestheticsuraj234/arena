@@ -1,3 +1,4 @@
+import type {SubmissionEvents} from '@arena/queue';
 import {createSubmissionSchema} from '@arena/shared';
 import {Hono} from 'hono';
 import {z} from 'zod';
@@ -7,6 +8,7 @@ import {NotFoundError, UnauthorizedError} from '../lib/errors';
 import {parseBody} from '../lib/validate';
 import {requireUser} from '../middleware/session';
 import {toSubmissionView, type SubmissionService} from '../services/submission-service';
+import {submissionEventsHandler, type EventStreamOptions} from './submission-events';
 
 const tokenSchema = z.uuid();
 const pageSchema = z.object({
@@ -15,7 +17,11 @@ const pageSchema = z.object({
 });
 
 /** Async submissions for signed-in users: create, read one, list mine. */
-export function submissionRoutes(service: SubmissionService) {
+export function submissionRoutes(
+  service: SubmissionService,
+  events: SubmissionEvents,
+  streamOptions?: EventStreamOptions,
+) {
   return new Hono<AppEnv>()
     .use(requireUser)
     .post('/', async (c) => {
@@ -32,6 +38,7 @@ export function submissionRoutes(service: SubmissionService) {
       const rows = await service.submissions.listByUser(user.id, limit, offset);
       return c.json(rows.map((s) => toSubmissionView(s)));
     })
+    .get('/:token/events', submissionEventsHandler(service, events, streamOptions))
     .get('/:token', async (c) => {
       const user = c.get('user');
       const token = tokenSchema.safeParse(c.req.param('token'));

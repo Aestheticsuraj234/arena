@@ -14,7 +14,7 @@ import {
   type ExecutionResult,
   type Executor,
 } from '@arena/engine';
-import {SubmissionProcessor, type SubmissionQueue} from '@arena/queue';
+import {MemorySubmissionEvents, SubmissionProcessor, type SubmissionQueue} from '@arena/queue';
 
 import {createApp} from '../src/app';
 import {MemoryRateLimiter} from '../src/lib/rate-limiter';
@@ -106,11 +106,16 @@ export function createTestContext() {
   const auth = createAuth(env, db);
   const registry = createDefaultRegistry();
   const executor = new FakeExecutor();
-  const queue = new InlineQueue(
-    new SubmissionProcessor(new SubmissionRepository(db), new ProblemRepository(db), executor),
+  const events = new MemorySubmissionEvents();
+  const processor = new SubmissionProcessor(
+    new SubmissionRepository(db),
+    new ProblemRepository(db),
+    executor,
+    {events},
   );
+  const queue = new InlineQueue(processor);
   const rateLimiter = new MemoryRateLimiter(5);
-  const app = createApp({env, db, auth, registry, queue, rateLimiter});
+  const app = createApp({env, db, auth, registry, queue, rateLimiter, events});
   const origin = {Origin: env.WEB_URL};
 
   /** Signs up a fresh user and returns its `Cookie` header value. */
@@ -152,6 +157,8 @@ export function createTestContext() {
     executor,
     queue,
     rateLimiter,
+    events,
+    processor,
     app,
     origin,
     signUp,

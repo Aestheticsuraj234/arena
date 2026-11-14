@@ -17,7 +17,9 @@
     "db:migrate": "pnpm --filter @arena/db db:migrate",
     "setup": "docker compose up -d && pnpm db:migrate && pnpm db:seed",
     "db:seed": "pnpm --filter @arena/db db:seed",
-    "db:generate": "pnpm --filter @arena/db db:generate"
+    "db:generate": "pnpm --filter @arena/db db:generate",
+    "images:build": "./scripts/build-images.sh",
+    "test:images": "pnpm --filter @arena/engine test:images"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -8,8 +8,11 @@ import {logger} from 'hono/logger';
 import type {AppEnv} from './app-env';
 import type {Auth} from './auth';
 import type {Env} from './env';
+import {judge0Routes} from './judge0/routes';
 import {AppError, type ErrorBody} from './lib/errors';
+import type {RateLimiter} from './lib/rate-limiter';
 import {loadSession} from './middleware/session';
+import {apiKeyRoutes} from './routes/api-keys';
 import {healthRoutes} from './routes/health';
 import {languageRoutes} from './routes/languages';
 import {meRoutes} from './routes/me';
@@ -23,10 +26,11 @@ export interface AppDeps {
   auth: Auth;
   registry: LanguageRegistry;
   queue: SubmissionQueue;
+  rateLimiter: RateLimiter;
 }
 
 /** Builds the HTTP app. Kept free of `listen()` so tests can call it directly. */
-export function createApp({env, db, auth, registry, queue}: AppDeps) {
+export function createApp({env, db, auth, registry, queue, rateLimiter}: AppDeps) {
   const app = new Hono<AppEnv>();
   const submissions = new SubmissionService(db, registry, queue);
 
@@ -37,7 +41,8 @@ export function createApp({env, db, auth, registry, queue}: AppDeps) {
     cors({
       origin: env.WEB_URL,
       credentials: true,
-      allowHeaders: ['Content-Type', 'Authorization'],
+      allowHeaders: ['Content-Type', 'Authorization', 'X-Auth-Token'],
+      exposeHeaders: ['X-RateLimit-Limit', 'X-RateLimit-Remaining', 'Retry-After'],
       allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     }),
   );
@@ -51,6 +56,13 @@ export function createApp({env, db, auth, registry, queue}: AppDeps) {
   app.route('/v1/languages', languageRoutes(db, registry));
   app.route('/v1/run', runRoutes(submissions, env.RUN_WAIT_MS));
   app.route('/v1/submissions', submissionRoutes(submissions));
+  app.route('/v1/api-keys', apiKeyRoutes(db));
+
+  // Judge0-compatible API at the root: /submissions, /languages, /statuses, /about.
+  app.route(
+    '/',
+    judge0Routes({db, registry, service: submissions, rateLimiter, waitMs: env.RUN_WAIT_MS}),
+  );
 
   app.notFound((c) => {
     const body: ErrorBody = {error: {code: 'not_found', message: 'Route not found'}};

@@ -48,6 +48,8 @@ export interface RunResponse {
   compileOutput: string | null;
   message: string | null;
   exitCode: number | null;
+  /** Signal that killed the program, e.g. `SIGSEGV`. */
+  signal: string | null;
   timeMs: number | null;
   memoryKb: number | null;
 }

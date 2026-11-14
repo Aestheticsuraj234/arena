@@ -82,6 +82,7 @@ export function toSubmissionView(s: Submission): SubmissionView {
     compileOutput: s.compileOutput,
     message: s.message,
     exitCode: s.exitCode,
+    signal: s.signal,
     timeMs: s.timeMs,
     memoryKb: s.memoryKb,
     createdAt: s.createdAt.toISOString(),

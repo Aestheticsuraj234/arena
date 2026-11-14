@@ -1,4 +1,5 @@
 export * from './client';
+export * from './repositories/api-key-repository';
 export * from './repositories/language-repository';
 export * from './repositories/problem-repository';
 export * from './repositories/submission-repository';

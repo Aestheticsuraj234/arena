@@ -5,6 +5,7 @@ import {serve} from '@hono/node-server';
 
 import {createApp} from './app';
 import {createAuth} from './auth';
+import {RedisRateLimiter} from './lib/rate-limiter';
 import {loadEnv} from './env';
 
 const env = loadEnv();
@@ -13,7 +14,8 @@ const auth = createAuth(env, db);
 const registry = createDefaultRegistry();
 const redis = createRedis(env.REDIS_URL);
 const queue = new BullSubmissionQueue(redis);
-const app = createApp({env, db, auth, registry, queue});
+const rateLimiter = new RedisRateLimiter(redis, env.RATE_LIMIT_PER_MINUTE);
+const app = createApp({env, db, auth, registry, queue, rateLimiter});
 
 const server = serve({fetch: app.fetch, port: env.API_PORT}, (info) => {
   console.log(`Arena API listening on http://localhost:${info.port}`);

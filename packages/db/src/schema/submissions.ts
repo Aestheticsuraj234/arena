@@ -42,6 +42,8 @@ export const submissions = pgTable(
     compileOutput: text(),
     message: text(),
     exitCode: integer(),
+    /** Signal that killed the program, e.g. `SIGSEGV`. */
+    signal: text(),
     timeMs: integer(),
     memoryKb: integer(),
 

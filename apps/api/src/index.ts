@@ -1,6 +1,7 @@
 import {createDb} from '@arena/db';
 import {createDefaultRegistry} from '@arena/engine';
 import {BullSubmissionQueue, createRedis, RedisSubmissionEvents} from '@arena/queue';
+import {createApiMetrics, createLogger, createRegistry} from '@arena/telemetry';
 import {serve} from '@hono/node-server';
 
 import {createApp} from './app';
@@ -9,6 +10,7 @@ import {RedisRateLimiter} from './lib/rate-limiter';
 import {loadEnv} from './env';
 
 const env = loadEnv();
+const logger = createLogger({service: 'api'});
 const {db, pool} = createDb(env.DATABASE_URL);
 const auth = createAuth(env, db);
 const registry = createDefaultRegistry();
@@ -17,14 +19,30 @@ const queue = new BullSubmissionQueue(redis);
 const rateLimiter = new RedisRateLimiter(redis, env.RATE_LIMIT_PER_MINUTE);
 const events = new RedisSubmissionEvents(redis);
 await events.ready();
-const app = createApp({env, db, auth, registry, queue, rateLimiter, events});
+const metricsRegistry = createRegistry('api');
+const metrics = {
+  registry: metricsRegistry,
+  api: createApiMetrics(metricsRegistry, () => queue.depth()),
+};
+const app = createApp({
+  env,
+  db,
+  auth,
+  registry,
+  queue,
+  rateLimiter,
+  events,
+  logger,
+  metrics,
+  readiness: {redis: async () => (await redis.ping()) === 'PONG'},
+});
 
 const server = serve({fetch: app.fetch, port: env.API_PORT}, (info) => {
-  console.log(`Arena API listening on http://localhost:${info.port}`);
+  logger.info({port: info.port}, 'Arena API listening');
 });
 
 async function shutdown(signal: string) {
-  console.log(`${signal} received, shutting down`);
+  logger.info({signal}, 'shutting down');
   server.close();
   await events.close();
   await queue.close();

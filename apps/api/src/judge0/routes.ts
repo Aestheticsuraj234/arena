@@ -185,6 +185,7 @@ const batchBodySchema = z.object({
 
 function toNewRun(body: Judge0SubmissionBody, apiKey: ApiKey, batchId: string | null): NewRun {
   return {
+    source: 'judge0',
     userId: apiKey.userId,
     apiKeyId: apiKey.id,
     batchId,

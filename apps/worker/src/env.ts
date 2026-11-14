@@ -12,6 +12,8 @@ const envSchema = z.object({
     .int()
     .positive()
     .default(() => availableParallelism()),
+  /** Port for `GET /metrics` and `GET /health`. */
+  WORKER_METRICS_PORT: z.coerce.number().int().positive().default(9465),
 });
 
 export type WorkerEnv = z.infer<typeof envSchema>;

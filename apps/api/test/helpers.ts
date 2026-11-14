@@ -16,6 +16,8 @@ import {
 } from '@arena/engine';
 import {MemorySubmissionEvents, SubmissionProcessor, type SubmissionQueue} from '@arena/queue';
 
+import {createApiMetrics, createLogger, createRegistry} from '@arena/telemetry';
+
 import {createApp} from '../src/app';
 import {MemoryRateLimiter} from '../src/lib/rate-limiter';
 import {createAuth} from '../src/auth';
@@ -115,7 +117,13 @@ export function createTestContext() {
   );
   const queue = new InlineQueue(processor);
   const rateLimiter = new MemoryRateLimiter(5);
-  const app = createApp({env, db, auth, registry, queue, rateLimiter, events});
+  const logger = createLogger({service: 'api-test', level: 'silent'});
+  const metricsRegistry = createRegistry('api');
+  const metrics = {
+    registry: metricsRegistry,
+    api: createApiMetrics(metricsRegistry, () => queue.depth()),
+  };
+  const app = createApp({env, db, auth, registry, queue, rateLimiter, events, logger, metrics});
   const origin = {Origin: env.WEB_URL};
 
   /** Signs up a fresh user and returns its `Cookie` header value. */
@@ -159,6 +167,8 @@ export function createTestContext() {
     rateLimiter,
     events,
     processor,
+    logger,
+    metrics,
     app,
     origin,
     signUp,

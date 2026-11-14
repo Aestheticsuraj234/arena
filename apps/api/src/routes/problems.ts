@@ -47,6 +47,7 @@ export function problemRoutes(service: SubmissionService, waitMs: number) {
       if (!problem) throw new NotFoundError('Problem not found');
       const body = await parseBody(c, submitProblemSchema);
       const created = await service.create({
+        source: 'problem',
         userId: user.id,
         languageId: body.languageId,
         sourceCode: body.sourceCode,
